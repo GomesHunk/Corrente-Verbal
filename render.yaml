@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: jogo-5-palavras
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -c gunicorn.conf.py app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.16
+      - key: WEB_CONCURRENCY
+        value: 1

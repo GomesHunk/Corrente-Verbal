@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo das 5 Palavras - Sala</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
+    <script>
+        // Aplicar tema IMEDIATAMENTE quando o body é carregado
+        (function () {
+            const temaSalvo = localStorage.getItem('tema') || 'theme-dark';
+            document.documentElement.className = `game-body ${temaSalvo}`;
+        })();
+    </script>
+</head>
+
+<body>
+    <div class="game-container">
+        <!-- Header do Jogo -->
+        <div class="game-header">
+            <div class="game-info">
+                <h1>Corrente Verbal</h1>
+                <div class="players-info">
+                    <span class="player-name" id="meu-nome"></span>
+                    <span class="vs">vs</span>
+                    <div class="players-list" id="lista-jogadores-header">
+                        <!-- Os outros jogadores aparecerão aqui -->
+                    </div>
+                </div>
+            </div>
+            <div class="game-controls">
+                <div class="theme-selector">
+                    <button class="btn btn-secondary btn-small" onclick="toggleThemeMenu()" id="theme-btn">
+                        🎨 Tema
+                    </button>
+                    <div class="theme-menu-dropdown hidden" id="theme-menu">
+                        <div class="theme-thumb" onclick="alterarTema('theme-light')" title="Claro">
+                            <img src="/static/themes/sun.svg" alt="Claro">
+                        </div>
+                        <div class="theme-thumb" onclick="alterarTema('theme-dark')" title="Escuro">
+                            <img src="/static/themes/moon.svg" alt="Escuro">
+                        </div>
+                        <div class="theme-thumb" onclick="alterarTema('theme-matrix')" title="Matrix">
+                            <img src="/static/themes/matrix.svg" alt="Matrix">
+                        </div>
+                        <div class="theme-thumb" onclick="alterarTema('theme-starwars')" title="Star Wars">
+                            <img src="/static/themes/starwars.svg" alt="Star Wars">
+                        </div>
+                        <div class="theme-thumb" onclick="alterarTema('theme-strangerthings')" title="Stranger Things">
+                            <img src="/static/themes/strangerthings.svg" alt="Stranger Things">
+                        </div>
+                        <div class="theme-thumb" onclick="alterarTema('theme-flamengo')" title="Flamengo">
+                            <img src="/static/themes/flamengo.svg" alt="Flamengo">
+                        </div>
+                        <div class="theme-thumb" onclick="alterarTema('theme-botafogo')" title="Botafogo">
+                            <img src="/static/themes/botafogo.svg" alt="Botafogo">
+                        </div>
+                        <div class="theme-thumb" onclick="alterarTema('theme-vasco')" title="Vasco">
+                            <img src="/static/themes/vasco.svg" alt="Vasco">
+                        </div>
+                        <div class="theme-thumb" onclick="alterarTema('theme-fluminense')" title="Fluminense">
+                            <img src="/static/themes/fluminense.svg" alt="Fluminense">
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-danger btn-small" onclick="sairDaSala()">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1">
+                        </path>
+                    </svg>
+                    Sair
+                </button>
+            </div>
+        </div>
+
+        <!-- Indicador de Turno -->
+        <div class="turn-indicator" id="indicador-turno">
+            <div class="turn-content">
+                <div class="turn-spinner hidden" id="spinner-turno"></div>
+                <span id="texto-turno">Aguardando jogadores...</span>
+            </div>
+        </div>
+
+        <!-- Seção: Aguardando Jogadores -->
+        <div class="section" id="secao-aguardando">
+            <div class="card text-center">
+                <h2>
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z">
+                        </path>
+                    </svg>
+                    Aguardando Jogadores
+                </h2>
+                <div class="waiting-spinner"></div>
+                <p id="status-sala">Conectando...</p>
+                <div class="room-code">
+                    <span class="text-muted">Código da sala:</span>
+                    <div class="code-display" id="codigo-atual"></div>
+                    <button class="copy-btn" onclick="copiarCodigo()" title="Copiar código">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z">
+                            </path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="config-info" class="text-muted"></div>
+            </div>
+        </div>
+
+        <!-- Seção: Definir Palavras -->
+        <div class="section hidden" id="secao-palavras">
+            <div class="card">
+                <h2>
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z">
+                        </path>
+                    </svg>
+                    Defina suas <span id="num-palavras-texto">5</span> palavras
+                </h2>
+                <p class="text-muted mb-3">Escolha palavras que seus adversários terão que adivinhar!</p>
+
+                <div class="words-input-container" id="container-palavras">
+                    <!-- Inputs serão gerados dinamicamente -->
+                </div>
+
+                <button class="btn btn-success btn-large" onclick="enviarPalavras()" id="btn-enviar-palavras">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Confirmar Palavras
+                </button>
+            </div>
+        </div>
+
+        <!-- Seção: Jogo -->
+        <div class="section hidden" id="secao-jogo">
+            <div class="game-board-new">
+                <!-- Coluna 1: Adivinhação / Espelho -->
+                <div class="guess-panel">
+                    <h3 id="titulo-adivinhacao">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                            </path>
+                        </svg>
+
+                        <span id="texto-titulo-adivinhacao">Sua Vez de Adivinhar</span>
+                    </h3>
+
+                    <div id="minha-vez" class="guess-controls">
+                        <div class="current-word-display">
+                            <div class="reference-word" id="palavra-referencia" style="display: none;">
+                                <span class="reference-label">Palavra de Referência:</span>
+                                <span class="reference-value" id="valor-referencia">---</span>
+                            </div>
+                            <div class="word-hint-large" id="dica-atual">---</div>
+                            <div class="word-progress" id="progresso-palavra">Palavra 1 de 5</div>
+                        </div>
+
+                        <div class="guess-input-group">
+                            <input type="text" id="input-tentativa" placeholder="Digite sua tentativa..."
+                                autocomplete="off">
+                            <button class="btn btn-primary" onclick="tentarAdivinhar()">
+                                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                                </svg>
+                                Tentar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Espelho do Jogador Ativo -->
+                    <div id="espelho-jogador" class="mirror-view hidden">
+                        <h3>
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            Observando: <span id="mirror-player-name"></span>
+                        </h3>
+
+                        <p class="text-muted mb-2">Aguarde sua vez de jogar.</p>
+
+
+                        <div class="current-word-display">
+                            <div class="reference-word" id="mirror-palavra-referencia" style="display: none;">
+                                <span class="reference-label">Palavra de Referência:</span>
+                                <span class="reference-value" id="mirror-valor-referencia">---</span>
+                            </div>
+                            <div class="word-hint-large" id="mirror-dica-atual">---</div>
+                            <div class="word-progress" id="mirror-progresso-palavra">Palavra 1 de 5</div>
+                        </div>
+
+                        <div class="guess-input-group">
+                            <input type="text" id="mirror-input-tentativa" placeholder="Seu palpite silencioso..."
+                                autocomplete="off" disabled>
+                            <button class="btn btn-secondary" disabled>
+                                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                </svg>
+                                Observando
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Botões de Emoji -->
+                    <div class="emoji-reactions">
+                        <h4>🎭 Reações</h4>
+                        <div class="emoji-buttons">
+                            <button class="emoji-btn" onclick="enviarEmoji('👍')" title="Gostei">👍</button>
+                            <button class="emoji-btn" onclick="enviarEmoji('👎')" title="Não gostei">👎</button>
+                            <button class="emoji-btn" onclick="enviarEmoji('🤔')" title="Pensativo">🤔</button>
+                            <button class="emoji-btn" onclick="enviarEmoji('😂')" title="Rindo">😂</button>
+                            <button class="emoji-btn" onclick="enviarEmoji('😱')" title="Surpreso">😱</button>
+                            <button class="emoji-btn" onclick="enviarEmoji('🔥')" title="Incrível">🔥</button>
+                            <button class="emoji-btn" onclick="enviarEmoji('💡')" title="Ideia">💡</button>
+                            <button class="emoji-btn" onclick="enviarEmoji('❤️')" title="Amei">❤️</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Coluna 2: Suas Palavras -->
+                <div class="my-words-panel">
+                    <h4>
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
+                            </path>
+                        </svg>
+                        Suas Palavras (Alvo: <span id="meu-alvo">---</span>)
+                    </h4>
+                    <div class="words-grid" id="minhas-palavras-grid">
+                        <!-- Palavras serão geradas dinamicamente -->
+                    </div>
+                </div>
+
+                <!-- Coluna 3: Todos os Jogadores -->
+                <div class="all-players-panel">
+
+                    <h4>
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z">
+                            </path>
+                        </svg>
+                        👥 Todos os Jogadores
+                    </h4>
+                    <div class="all-players-scroll" id="todos-jogadores-container">
+                        <!-- Jogadores serão gerados dinamicamente -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Histórico -->
+            <div class="history-panel">
+                <h3>
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Histórico de Tentativas
+                </h3>
+                <div class="history-list" id="lista-historico">
+                    <div class="no-history">Nenhuma tentativa ainda</div>
+                </div>
+            </div>
+
+            <!-- Chat -->
+            <div class="chat-panel">
+                <div class="chat-header">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z">
+                        </path>
+                    </svg>
+                    Chat
+                </div>
+                <div class="chat-messages" id="mensagens-chat">
+                    <!-- Mensagens serão adicionadas dinamicamente -->
+                </div>
+                <div class="chat-input">
+                    <input type="text" id="input-chat" placeholder="Digite uma mensagem..." maxlength="200"
+                        autocomplete="off">
+                    <button class="btn btn-primary btn-small" onclick="enviarMensagem()">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Fim de Jogo -->
+    <div id="modal-fim-jogo" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="titulo-fim-jogo">Fim de Jogo!</h2>
+            </div>
+            <div class="modal-body">
+                <p id="mensagem-fim-jogo"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="voltarInicio()">Voltar ao Início</button>
+                <button class="btn btn-secondary" onclick="fecharModalFim()">Continuar Conversando</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        // Variáveis globais
+        let socket;
+        let meuNome = '';
+        let codigoSala = '';
+        let numPalavras = 5;
+        let estadoJogo = null;
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function () {
+            // Obter parâmetros da URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const pathParts = window.location.pathname.split('/');
+
+            meuNome = urlParams.get('jogador') || '';
+            codigoSala = pathParts[pathParts.length - 1] || '';
+            numPalavras = parseInt(urlParams.get('num_palavras')) || 5;
+
+            if (!meuNome || !codigoSala) {
+                mostrarToast('Parâmetros inválidos. Redirecionando...', 'error');
+                setTimeout(() => window.location.href = '/', 2000);
+                return;
+            }
+
+            document.getElementById('meu-nome').textContent = meuNome;
+            document.getElementById('codigo-atual').textContent = codigoSala;
+            document.getElementById('num-palavras-texto').textContent = numPalavras;
+
+            inicializarSocket();
+            gerarInputsPalavras();
+        });
+
+        function inicializarSocket() {
+            socket = io();
+
+            socket.on('connect', function () {
+                console.log('Conectado ao servidor');
+
+                // Verificar se é criação ou entrada
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.has('max_jogadores')) {
+                    // Criar sala
+                    socket.emit('criar_sala', {
+                        nome: meuNome,
+                        num_palavras: numPalavras,
+                        max_jogadores: parseInt(urlParams.get('max_jogadores'))
+                    });
+                } else {
+                    // Entrar em sala existente
+                    socket.emit('entrar_na_sala', {
+                        sala: codigoSala,
+                        nome: meuNome
+                    });
+                }
+            });
+
+            // Listener para emojis recebidos
+            socket.on('emoji_recebido', function (data) {
+                console.log('Emoji recebido:', data);
+                criarEmojiFlutante(data.emoji, data.nome);
+            });
+
+            socket.on('disconnect', function () {
+                console.log('Desconectado do servidor');
+                mostrarToast('Conexão perdida. Tentando reconectar...', 'warning');
+            });
+
+            // Eventos do jogo
+            socket.on('sala_criada', function (data) {
+                console.log('Sala criada:', data);
+                document.getElementById('status-sala').textContent = `Sala criada! Aguardando jogadores... (1/${data.config.max_jogadores})`;
+                document.getElementById('config-info').textContent = `${data.config.num_palavras} palavras • Máx. ${data.config.max_jogadores} jogadores`;
+            });
+
+            socket.on('jogador_entrou', function (data) {
+                console.log('Jogador entrou:', data);
+                document.getElementById('status-sala').textContent = `${data.total}/${data.max} jogadores conectados`;
+                atualizarListaJogadores(data.jogadores);
+            });
+
+            socket.on('pode_comecar', function (data) {
+                console.log('Pode começar:', data);
+                document.getElementById('status-sala').textContent = data.msg;
+                atualizarListaJogadores(data.jogadores);
+
+                // Atualizar configuração para todos os jogadores
+                if (data.config) {
+                    numPalavras = data.config.num_palavras;
+                    document.getElementById('num-palavras-texto').textContent = numPalavras;
+                    gerarInputsPalavras(); // Regenerar com o número correto
+                }
+
+                setTimeout(() => {
+                    mostrarSecao('secao-palavras');
+                }, 1000);
+            });
+
+            socket.on('status_palavras_atualizado', function (data) {
+                console.log('Status palavras atualizado:', data);
+                mostrarToast(data.msg, 'info');
+                atualizarStatusPalavras(data.status_jogadores);
+            });
+
+            socket.on('palavras_recebidas', function (data) {
+                console.log('Palavras recebidas:', data);
+                mostrarToast(data.msg, 'success');
+                document.getElementById('btn-enviar-palavras').disabled = true;
+                document.getElementById('btn-enviar-palavras').textContent = 'Palavras Enviadas ✓';
+            });
+
+            socket.on('jogo_iniciado', function (data) {
+                console.log('Jogo iniciado:', data);
+                mostrarToast(data.msg, 'success');
+                estadoJogo = data.estado;
+                mostrarSecao('secao-jogo');
+                atualizarInterfaceJogo();
+            });
+
+            socket.on('resposta_tentativa', function (data) {
+                console.log('Resposta tentativa:', data);
+                estadoJogo = data.estado;
+
+                adicionarHistorico(data.jogador, data.palavra_tentada, data.acertou, data.mensagem);
+
+                if (data.acertou) {
+                    mostrarToast(`${data.jogador}: ${data.mensagem}`, 'success');
+                } else {
+                    mostrarToast(`${data.jogador}: ${data.mensagem}`, 'error');
+                }
+
+                atualizarInterfaceJogo();
+                limparInputTentativa();
+            });
+
+            socket.on('fim_de_jogo', function (data) {
+                console.log('Fim de jogo:', data);
+                document.getElementById('titulo-fim-jogo').textContent = '🎉 Fim de Jogo!';
+                document.getElementById('mensagem-fim-jogo').innerHTML = `
+                    <div class="winner-announcement">${data.mensagem}</div>
+                    <div class="loading-gabarito">
+                        <div class="spinner"></div>
+                        <p>Carregando gabarito...</p>
+                    </div>
+                `;
+                document.getElementById('modal-fim-jogo').classList.remove('hidden');
+                mostrarToast(data.mensagem, 'success');
+
+                // Solicitar gabarito completo
+                socket.emit('obter_gabarito', { sala: codigoSala });
+            });
+
+            socket.on('gabarito_completo', function (data) {
+                console.log('Gabarito completo:', data);
+                exibirGabarito(data.gabarito);
+            });
+
+            socket.on('jogo_reiniciado', function (data) {
+                console.log('Jogo reiniciado:', data);
+                mostrarToast(data.msg, 'success');
+
+                // Resetar interface
+                estadoJogo = null;
+                document.getElementById('modal-fim-jogo').classList.add('hidden');
+
+                // Voltar para seção de definir palavras
+                mostrarSecao('secao-palavras');
+
+                // Resetar botão de enviar palavras
+                const btnEnviar = document.getElementById('btn-enviar-palavras');
+                btnEnviar.disabled = false;
+                btnEnviar.textContent = 'Confirmar Palavras';
+                btnEnviar.innerHTML = `
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Confirmar Palavras
+                `;
+
+                // Limpar inputs de palavras
+                for (let i = 1; i <= numPalavras; i++) {
+                    const input = document.getElementById(`palavra-${i}`);
+                    if (input) input.value = '';
+                }
+
+                // Limpar histórico e chat
+                document.getElementById('lista-historico').innerHTML = '<div class="no-history">Nenhuma tentativa ainda</div>';
+                document.getElementById('mensagens-chat').innerHTML = '';
+            });
+
+            socket.on('nova_mensagem_chat', function (data) {
+                console.log('Nova mensagem chat:', data);
+                adicionarMensagemChat(data.jogador, data.mensagem, data.timestamp);
+            });
+
+            socket.on('erro', function (data) {
+                console.error('Erro:', data);
+                mostrarToast(data.msg, 'error');
+            });
+        }
+
+        function gerarInputsPalavras() {
+            const container = document.getElementById('container-palavras');
+            container.innerHTML = '';
+
+            for (let i = 1; i <= numPalavras; i++) {
+                const div = document.createElement('div');
+                div.className = 'input-group';
+                div.innerHTML = `
+                    <label for="palavra-${i}">Palavra ${i}:</label>
+                    <input type="text" id="palavra-${i}" placeholder="Digite a palavra ${i}" maxlength="30" autocomplete="off">
+                `;
+                container.appendChild(div);
+            }
+
+            // Adicionar event listener para Enter
+            container.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') {
+                    enviarPalavras();
+                }
+            });
+        }
+
+        function enviarPalavras() {
+            const palavras = [];
+            let todasPreenchidas = true;
+
+            for (let i = 1; i <= numPalavras; i++) {
+                const input = document.getElementById(`palavra-${i}`);
+                const palavra = input.value.trim();
+
+                if (!palavra) {
+                    mostrarToast(`Por favor, preencha a palavra ${i}`, 'error');
+                    input.focus();
+                    return;
+                }
+
+                if (palavra.length < 2) {
+                    mostrarToast(`A palavra ${i} deve ter pelo menos 2 letras`, 'error');
+                    input.focus();
+                    return;
+                }
+
+                if (!/^[a-zA-ZÀ-ÿ\s]+$/.test(palavra)) {
+                    mostrarToast(`A palavra ${i} deve conter apenas letras`, 'error');
+                    input.focus();
+                    return;
+                }
+
+                palavras.push(palavra);
+            }
+
+            socket.emit('enviar_palavras', {
+                sala: codigoSala,
+                nome: meuNome,
+                palavras: palavras
+            });
+        }
+
+        function tentarAdivinhar() {
+            const input = document.getElementById('input-tentativa');
+            const palavra = input.value.trim();
+
+            if (!palavra) {
+                mostrarToast('Digite uma palavra para tentar!', 'error');
+                input.focus();
+                return;
+            }
+
+            socket.emit('tentar_adivinhar', {
+                sala: codigoSala,
+                nome: meuNome,
+                palavra: palavra
+            });
+        }
+
+        function enviarMensagem() {
+            const input = document.getElementById('input-chat');
+            const mensagem = input.value.trim();
+
+            if (!mensagem) return;
+
+            socket.emit('enviar_mensagem_chat', {
+                sala: codigoSala,
+                nome: meuNome,
+                mensagem: mensagem
+            });
+
+            input.value = '';
+        }
+
+        function atualizarInterfaceJogo() {
+            if (!estadoJogo) return;
+
+            // Atualizar indicador de turno
+            const indicador = document.getElementById('indicador-turno');
+            const textoTurno = document.getElementById('texto-turno');
+            const minhaVez = document.getElementById('minha-vez');
+            const naoMinhaVez = document.getElementById('nao-minha-vez');
+
+            if (estadoJogo.jogador_da_vez === meuNome) {
+                indicador.className = 'turn-indicator my-turn';
+                textoTurno.textContent = 'Sua vez de jogar!';
+                minhaVez.classList.remove('hidden');
+                naoMinhaVez.classList.add('hidden');
+            } else {
+                indicador.className = 'turn-indicator opponent-turn';
+                textoTurno.textContent = `Vez de ${estadoJogo.jogador_da_vez}`;
+                minhaVez.classList.add('hidden');
+                naoMinhaVez.classList.remove('hidden');
+                document.getElementById('jogador-da-vez').textContent = estadoJogo.jogador_da_vez;
+            }
+
+            // Encontrar meus dados e do meu alvo
+            const meusDados = estadoJogo.jogadores.find(j => j.nome === meuNome);
+            if (meusDados) {
+                document.getElementById('meu-alvo').textContent = meusDados.alvo;
+                document.getElementById('dica-atual').textContent = meusDados.dica_atual || '---';
+                document.getElementById('progresso-palavra').textContent =
+                    `Palavra ${meusDados.palavra_atual_index + 1} de ${estadoJogo.config.num_palavras}`;
+
+                // Atualizar palavra de referência
+                const palavraReferencia = document.getElementById('palavra-referencia');
+                const valorReferencia = document.getElementById('valor-referencia');
+
+                if (meusDados.palavra_anterior && meusDados.palavra_anterior.trim()) {
+                    palavraReferencia.style.display = 'block';
+                    valorReferencia.textContent = meusDados.palavra_anterior;
+                } else {
+                    palavraReferencia.style.display = 'none';
+                }
+
+                // Atualizar grid das palavras do alvo
+                atualizarGridPalavras('palavras-alvo-grid', meusDados, false);
+            }
+
+            // Atualizar minhas palavras
+            const meuAlvo = estadoJogo.jogadores.find(j => j.nome === meusDados?.alvo);
+            if (meuAlvo) {
+                atualizarGridPalavras('minhas-palavras-grid', meuAlvo, true);
+            }
+
+            // Atualizar lista de jogadores
+            const jogadores = estadoJogo.jogadores.map(j => j.nome);
+            atualizarListaJogadores(jogadores);
+        }
+
+        function atualizarGridPalavras(gridId, dadosJogador, saoMinhasPalavras) {
+            const grid = document.getElementById(gridId);
+            grid.innerHTML = '';
+
+            for (let i = 0; i < estadoJogo.config.num_palavras; i++) {
+                const div = document.createElement('div');
+                div.className = 'word-card';
+
+                // Determinar se a palavra foi descoberta
+                const descoberta = dadosJogador.palavras_descobertas && dadosJogador.palavras_descobertas[i];
+
+                if (descoberta) {
+                    div.classList.add('discovered');
+                } else {
+                    div.classList.add('not-discovered');
+                }
+
+                const dica = dadosJogador.dicas && dadosJogador.dicas[i] ? dadosJogador.dicas[i] : '?';
+                const status = descoberta ? '✓' : '';
+
+                div.innerHTML = `
+                    <div class="word-number">${i + 1}</div>
+                    <div class="word-hint">${dica}</div>
+                    <div class="word-status">${status}</div>
+                `;
+
+                grid.appendChild(div);
+            }
+        }
+
+        function atualizarListaJogadores(jogadores) {
+            const lista = document.getElementById('lista-jogadores-header');
+            lista.innerHTML = '';
+
+            // Filtrar para mostrar apenas os outros jogadores (não o próprio usuário)
+            const outrosJogadores = jogadores.filter(jogador => jogador !== meuNome);
+
+            outrosJogadores.forEach(jogador => {
+                const span = document.createElement('span');
+                span.className = 'player-chip';
+                span.textContent = jogador;
+
+                // Destacar quem está na vez
+                if (estadoJogo && estadoJogo.jogador_da_vez === jogador) {
+                    span.classList.add('target');
+                }
+
+                lista.appendChild(span);
+            });
+        }
+
+        function adicionarHistorico(jogador, palavra, acertou, mensagem) {
+            const lista = document.getElementById('lista-historico');
+
+            // Remover mensagem "nenhuma tentativa"
+            const noHistory = lista.querySelector('.no-history');
+            if (noHistory) {
+                noHistory.remove();
+            }
+
+            const div = document.createElement('div');
+            div.className = `history-item ${acertou ? 'success' : 'error'}`;
+
+            const agora = new Date();
+            const timestamp = agora.toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            div.innerHTML = `
+                <div class="history-header">
+                    <span class="history-player">${jogador}</span>
+                    <span class="history-time">${timestamp}</span>
+                </div>
+                <div class="history-content">
+                    <div class="history-word">Tentativa: "${palavra}"</div>
+                    <div class="history-result ${acertou ? 'success' : 'error'}">${mensagem}</div>
+                </div>
+            `;
+
+            lista.insertBefore(div, lista.firstChild);
+
+            // Limitar histórico a 20 itens
+            while (lista.children.length > 20) {
+                lista.removeChild(lista.lastChild);
+            }
+        }
+
+        function adicionarMensagemChat(jogador, mensagem, timestamp) {
+            const container = document.getElementById('mensagens-chat');
+
+            const div = document.createElement('div');
+            div.className = `chat-message ${jogador === meuNome ? 'own' : 'other'}`;
+
+            div.innerHTML = `
+                <div class="message-header">
+                    <span>${jogador}</span>
+                    <span>${timestamp}</span>
+                </div>
+                <div class="message-bubble">${mensagem}</div>
+            `;
+
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function limparInputTentativa() {
+            document.getElementById('input-tentativa').value = '';
+        }
+
+        function mostrarSecao(secaoId) {
+            // Esconder todas as seções
+            document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+            // Mostrar seção específica
+            document.getElementById(secaoId).classList.remove('hidden');
+        }
+
+        function mostrarToast(mensagem, tipo = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = mensagem;
+            toast.className = `toast ${tipo} show`;
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function copiarCodigo() {
+            const codigo = document.getElementById('codigo-atual').textContent;
+            navigator.clipboard.writeText(codigo).then(() => {
+                mostrarToast('Código copiado!', 'success');
+            }).catch(() => {
+                mostrarToast('Erro ao copiar código', 'error');
+            });
+        }
+
+        function sairDaSala() {
+            if (confirm('Tem certeza que deseja sair da sala?')) {
+                socket.emit('sair_da_sala', {
+                    sala: codigoSala,
+                    nome: meuNome
+                });
+                window.location.href = '/';
+            }
+        }
+
+        function voltarInicio() {
+            window.location.href = '/';
+        }
+
+        function exibirGabarito(gabarito) {
+            let gabaritoHtml = '<div class="gabarito-completo">';
+            gabaritoHtml += '<h3>📝 Gabarito Completo</h3>';
+
+            for (const [jogador, dados] of Object.entries(gabarito)) {
+                gabaritoHtml += `
+                    <div class="player-answers">
+                        <h4>Palavras de ${jogador}:</h4>
+                        <ol class="answer-list">
+                `;
+
+                for (let i = 0; i < dados.palavras_originais.length; i++) {
+                    const palavraOriginal = dados.palavras_originais[i];
+                    const palavraNormalizada = dados.palavras_normalizadas[i];
+                    const descoberta = dados.descobertas[i];
+
+                    let statusIcon = descoberta ? '✅' : '❌';
+                    let correcaoInfo = '';
+
+                    // Mostrar se houve correção automática
+                    if (palavraOriginal.toLowerCase() !== palavraNormalizada.toLowerCase()) {
+                        correcaoInfo = ` <span class="correction-info">(corrigido de "${palavraOriginal}")</span>`;
+                    }
+
+                    gabaritoHtml += `
+                        <li class="answer-item ${descoberta ? 'discovered' : 'not-discovered'}">
+                            ${statusIcon} <strong>${palavraNormalizada}</strong>${correcaoInfo}
+                        </li>
+                    `;
+                }
+
+                gabaritoHtml += '</ol></div>';
+            }
+
+            gabaritoHtml += '</div>';
+
+            // Atualizar modal com gabarito e botões
+            document.getElementById('mensagem-fim-jogo').innerHTML = `
+                <div class="winner-announcement">🎉 ${estadoJogo?.vencedor || 'Alguém'} venceu!</div>
+                ${gabaritoHtml}
+            `;
+
+            // Atualizar botões do modal
+            document.querySelector('.modal-footer').innerHTML = `
+                <button class="btn btn-success" onclick="novoJogo()">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    🎮 Novo Jogo
+                </button>
+                <button class="btn btn-primary" onclick="voltarInicio()">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                    </svg>
+                    🏠 Início
+                </button>
+                <button class="btn btn-secondary" onclick="fecharModalFim()">
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                    </svg>
+                    💬 Chat
+                </button>
+            `;
+        }
+
+        function novoJogo() {
+            if (confirm('Tem certeza que deseja iniciar um novo jogo? Todos os jogadores terão que definir novas palavras.')) {
+                socket.emit('novo_jogo', {
+                    sala: codigoSala,
+                    nome: meuNome
+                });
+            }
+        }
+
+        function fecharModalFim() {
+            document.getElementById('modal-fim-jogo').classList.add('hidden');
+        }
+
+        // Sistema de Emojis Flutuantes
+        function enviarEmoji(emoji) {
+            // Enviar emoji via socket - NÃO criar localmente, deixar o servidor retornar
+            socket.emit('enviar_emoji', {
+                sala: codigoSala,
+                nome: meuNome,
+                emoji: emoji
+            });
+        }
+
+        function criarEmojiFlutante(emoji, jogador) {
+            const container = document.querySelector('.game-container');
+            const emojiElement = document.createElement('div');
+            emojiElement.className = 'floating-emoji';
+            emojiElement.innerHTML = `
+                <div class="emoji-content">
+                    <span class="emoji-icon">${emoji}</span>
+                </div>
+            `;
+
+            // Posição aleatória horizontal
+            emojiElement.style.left = Math.random() * 80 + 10 + "%";
+            emojiElement.style.bottom = "0px";
+
+            container.appendChild(emojiElement);
+
+            // Inicia a animação (forçando reflow)
+            setTimeout(() => {
+                emojiElement.style.bottom = "100vh";
+                emojiElement.style.opacity = "0";
+            }, 10);
+
+            // Remove depois da animação
+            setTimeout(() => {
+                container.removeChild(emojiElement);
+            }, 3000);
+        }
+
+        // Atualizar espelho do jogador ativo
+        function atualizarEspelhoJogador() {
+            if (!estadoJogo) return;
+
+            const minhaVez = document.getElementById('minha-vez');
+            const espelhoJogador = document.getElementById('espelho-jogador');
+            const tituloAdivinhacao = document.getElementById('texto-titulo-adivinhacao');
+
+            if (estadoJogo.jogador_da_vez === meuNome) {
+                // É minha vez - mostrar controles normais
+                minhaVez.classList.remove('hidden');
+                espelhoJogador.classList.add('hidden');
+                tituloAdivinhacao.textContent = 'Sua Vez de Adivinhar';
+            } else {
+                // Não é minha vez - mostrar espelho
+                minhaVez.classList.add('hidden');
+                espelhoJogador.classList.remove('hidden');
+                tituloAdivinhacao.textContent = 'Observando o Jogo';
+
+                // Encontrar dados do jogador ativo
+                const jogadorAtivo = estadoJogo.jogadores.find(j => j.nome === estadoJogo.jogador_da_vez);
+                if (jogadorAtivo) {
+                    document.getElementById('mirror-player-name').textContent = jogadorAtivo.nome;
+                    document.getElementById('mirror-dica-atual').textContent = jogadorAtivo.dica_atual || '---';
+                    document.getElementById('mirror-progresso-palavra').textContent =
+                        `Palavra ${jogadorAtivo.palavra_atual_index + 1} de ${estadoJogo.config.num_palavras}`;
+
+                    // Palavra de referência no espelho
+                    const mirrorPalavraReferencia = document.getElementById('mirror-palavra-referencia');
+                    const mirrorValorReferencia = document.getElementById('mirror-valor-referencia');
+
+                    if (jogadorAtivo.palavra_anterior && jogadorAtivo.palavra_anterior.trim()) {
+                        mirrorPalavraReferencia.style.display = 'block';
+                        mirrorValorReferencia.textContent = jogadorAtivo.palavra_anterior;
+                    } else {
+                        mirrorPalavraReferencia.style.display = 'none';
+                    }
+                }
+            }
+        }
+
+        // Atualizar painel de todos os jogadores
+        function atualizarTodosJogadores() {
+            if (!estadoJogo) return;
+
+            const container = document.getElementById('todos-jogadores-container');
+            container.innerHTML = '';
+
+            estadoJogo.jogadores.forEach(jogador => {
+                const playerDiv = document.createElement('div');
+                playerDiv.className = 'player-section';
+
+                // Ícone especial para jogador ativo
+                const icone = jogador.nome === estadoJogo.jogador_da_vez ? '🎮' : '👤';
+                const status = jogador.nome === estadoJogo.jogador_da_vez ? ' (Jogando)' : '';
+
+                // Contar palavras descobertas pelo jogador (palavras do seu alvo)
+                const descobertas = jogador.palavras_descobertas ?
+                    jogador.palavras_descobertas.filter(d => d).length : 0;
+                const total = estadoJogo.config.num_palavras;
+
+                // Encontrar quem é o alvo deste jogador
+                const nomeAlvo = jogador.alvo || '---';
+
+                playerDiv.innerHTML = `
+                    <div class="player-header">
+                        <h5>${icone} ${jogador.nome}${status}</h5>
+                        <span class="player-progress">${descobertas}/${total}</span>
+                    </div>
+                    <div class="player-target-info">
+                        <span class="target-label">Adivinhando palavras de:</span>
+                        <span class="target-name">${nomeAlvo}</span>
+                    </div>
+                    <div class="player-words-grid" id="player-${jogador.nome}-grid">
+                        <!-- Palavras serão geradas -->
+                    </div>
+                `;
+
+                container.appendChild(playerDiv);
+
+                // Gerar grid de palavras para este jogador (palavras do seu alvo)
+                const grid = document.getElementById(`player-${jogador.nome}-grid`);
+                for (let i = 0; i < total; i++) {
+                    const wordDiv = document.createElement('div');
+                    wordDiv.className = 'mini-word-card';
+
+                    const descoberta = jogador.palavras_descobertas && jogador.palavras_descobertas[i];
+                    const dica = jogador.dicas && jogador.dicas[i] ? jogador.dicas[i] : '?';
+
+                    if (descoberta) {
+                        wordDiv.classList.add('discovered');
+                    } else {
+                        wordDiv.classList.add('not-discovered');
+                    }
+
+                    wordDiv.innerHTML = `
+                        <div class="mini-word-hint">${dica}</div>
+                        <div class="mini-word-status">${descoberta ? '✓' : ''}</div>
+                    `;
+
+                    grid.appendChild(wordDiv);
+                }
+            });
+        }
+
+
+        // Atualizar função atualizarInterfaceJogo
+        function atualizarInterfaceJogo() {
+            if (!estadoJogo) return;
+
+            // Atualizar indicador de turno
+            const indicador = document.getElementById('indicador-turno');
+            const textoTurno = document.getElementById('texto-turno');
+
+            if (estadoJogo.jogador_da_vez === meuNome) {
+                indicador.className = 'turn-indicator my-turn';
+                textoTurno.textContent = 'Sua vez de jogar!';
+            } else {
+                indicador.className = 'turn-indicator opponent-turn';
+                textoTurno.textContent = `Vez de ${estadoJogo.jogador_da_vez}`;
+            }
+
+            // Atualizar espelho do jogador
+            atualizarEspelhoJogador();
+
+            // Encontrar meus dados e do meu alvo
+            const meusDados = estadoJogo.jogadores.find(j => j.nome === meuNome);
+            if (meusDados) {
+                document.getElementById('meu-alvo').textContent = meusDados.alvo;
+                document.getElementById('dica-atual').textContent = meusDados.dica_atual || '---';
+                document.getElementById('progresso-palavra').textContent =
+                    `Palavra ${meusDados.palavra_atual_index + 1} de ${estadoJogo.config.num_palavras}`;
+
+                // Atualizar palavra de referência
+                const palavraReferencia = document.getElementById('palavra-referencia');
+                const valorReferencia = document.getElementById('valor-referencia');
+
+                if (meusDados.palavra_anterior && meusDados.palavra_anterior.trim()) {
+                    palavraReferencia.style.display = 'block';
+                    valorReferencia.textContent = meusDados.palavra_anterior;
+                } else {
+                    palavraReferencia.style.display = 'none';
+                }
+            }
+
+            // Atualizar minhas palavras (como alvo)
+            const meuAlvo = estadoJogo.jogadores.find(j => j.nome === meusDados?.alvo);
+            if (meuAlvo) {
+                atualizarGridPalavras('minhas-palavras-grid', meuAlvo, true);
+            }
+
+            // Atualizar todos os jogadores
+            atualizarTodosJogadores();
+
+            // Atualizar lista de jogadores no header
+            const jogadores = estadoJogo.jogadores.map(j => j.nome);
+            atualizarListaJogadores(jogadores);
+        }
+
+        // Função para atualizar status das palavras
+        function atualizarStatusPalavras(statusJogadores) {
+            // Adicionar indicador visual na seção de palavras
+            let statusHtml = '<div class="status-palavras" style="margin-top: 1rem; padding: 1rem; background: var(--surface-hover); border-radius: var(--radius); border: 1px solid var(--border);">';
+            statusHtml += '<h4 style="margin-bottom: 0.75rem; color: var(--text-primary);">📝 Status dos Jogadores:</h4>';
+            statusHtml += '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">';
+
+            statusJogadores.forEach(jogador => {
+                const icone = jogador.palavras_definidas ? '✅' : '⏳';
+                const status = jogador.palavras_definidas ? 'Pronto' : 'Escrevendo...';
+                const cor = jogador.palavras_definidas ? 'var(--success-color)' : 'var(--warning-color)';
+
+                statusHtml += `
+                    <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--surface-elevated); border-radius: var(--radius); border: 1px solid var(--border);">
+                        <span style="font-size: 1.2rem;">👤</span>
+                        <span style="font-weight: 500; color: var(--text-primary);">${jogador.nome}</span>
+                        <span style="color: ${cor}; font-size: 0.8rem; font-weight: 600;">${icone} ${status}</span>
+                    </div>
+                `;
+            });
+
+            statusHtml += '</div></div>';
+
+            // Remover status anterior se existir
+            const statusAnterior = document.querySelector('.status-palavras');
+            if (statusAnterior) {
+                statusAnterior.remove();
+            }
+
+            // Adicionar novo status
+            const containerPalavras = document.getElementById('secao-palavras').querySelector('.card');
+            containerPalavras.insertAdjacentHTML('beforeend', statusHtml);
+        }
+
+        // Event listeners para inputs
+        document.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                const activeElement = document.activeElement;
+
+                if (activeElement.id === 'input-tentativa') {
+                    tentarAdivinhar();
+                } else if (activeElement.id === 'input-chat') {
+                    enviarMensagem();
+                }
+            }
+        });
+
+        // Função para alterar tema
+        function alterarTema(tema) {
+            document.body.className = `game-body ${tema}`;
+            localStorage.setItem('tema', tema);
+            mostrarToast(`Tema alterado para: ${tema.replace('theme-', '').charAt(0).toUpperCase() + tema.replace('theme-', '').slice(1)}`, 'success');
+            toggleThemeMenu(); // Fechar menu após seleção
+        }
+
+        // Função para toggle do menu de temas
+        function toggleThemeMenu() {
+            const menu = document.getElementById('theme-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        // Fechar menu de temas ao clicar fora
+        document.addEventListener('click', function (e) {
+            const themeBtn = document.getElementById('theme-btn');
+            const themeMenu = document.getElementById('theme-menu');
+
+            if (!themeBtn.contains(e.target) && !themeMenu.contains(e.target)) {
+                themeMenu.classList.add('hidden');
+            }
+        });
+
+
+    </script>
+</body>
+
+</html>

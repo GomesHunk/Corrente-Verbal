@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Corrente Verbal</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
+</head>
+
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Corrente Verbal</h1>
+            <p class="text-center text-muted mb-4">Desafie seus amigos em uma batalha de palavras!</p>
+
+            <!-- Como Jogar -->
+            <div class="how-to-play">
+                <h2>
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Como Jogar
+                </h2>
+                <ul class="steps">
+                    <li class="step">Cada jogador define suas palavras secretas</li>
+                    <li class="step">A primeira palavra é mostrada completa, as outras apenas a inicial</li>
+                    <li class="step">Tente adivinhar sequencialmente: palavra 1, depois 2, depois 3...</li>
+                    <li class="step">Ao errar, ganha uma letra extra da palavra atual</li>
+                    <li class="step">Vence quem descobrir todas as palavras do adversário primeiro!</li>
+                </ul>
+            </div>
+
+            <!-- Formulário -->
+            <div class="form-section">
+                <div class="input-group">
+                    <label for="nome-input">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                        </svg>
+                        Seu nome:
+                    </label>
+                    <input type="text" id="nome-input" placeholder="Digite seu nome" maxlength="20" autocomplete="off">
+                </div>
+
+                <!-- Configurações da Sala (inicialmente oculta) -->
+                <div id="config-section" class="hidden">
+                    <h3>Configurações da Sala</h3>
+                    <div class="config-section">
+                        <div class="config-item">
+                            <label for="max-jogadores">Máximo de jogadores:</label>
+                            <div class="range-input">
+                                <input type="range" id="max-jogadores" min="2" max="8" value="2">
+                                <span class="range-value" id="max-jogadores-value">2</span>
+                            </div>
+                        </div>
+                        <div class="config-item">
+                            <label for="num-palavras">Número de palavras:</label>
+                            <div class="range-input">
+                                <input type="range" id="num-palavras" min="4" max="8" value="5">
+                                <span class="range-value" id="num-palavras-value">5</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="main-actions">
+                    <button class="btn btn-primary btn-large" onclick="mostrarConfiguracoes()">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Criar Sala
+                    </button>
+                    <button class="btn btn-secondary btn-large" onclick="mostrarEntrarSala()">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013 3v1">
+                            </path>
+                        </svg>
+                        Entrar em Sala
+                    </button>
+                    <div class="theme-selector-wrapper">
+                        <button class="btn btn-secondary btn-large" onclick="toggleThemeMenu()" id="theme-btn">
+                            🎨 Tema
+                        </button>
+                        <div class="theme-menu-dropdown hidden" id="theme-menu">
+                            <div class="theme-thumb" onclick="alterarTema('theme-light')" title="Claro">
+                                <img src="/static/themes/sun.svg" alt="Claro" />
+                            </div>
+                            <div class="theme-thumb" onclick="alterarTema('theme-dark')" title="Escuro">
+                                <img src="/static/themes/moon.svg" alt="Escuro" />
+                            </div>
+                            <div class="theme-thumb" onclick="alterarTema('theme-matrix')" title="Matrix">
+                                <img src="/static/themes/matrix.svg" alt="Matrix" />
+                            </div>
+                            <div class="theme-thumb" onclick="alterarTema('theme-starwars')" title="Star Wars">
+                                <img src="/static/themes/starwars.svg" alt="Star Wars" />
+                            </div>
+                            <div class="theme-thumb" onclick="alterarTema('theme-strangerthings')" title="Stranger Things">
+                                <img src="/static/themes/strangerthings.svg" alt="Stranger Things" />
+                            </div>
+                            <div class="theme-thumb" onclick="alterarTema('theme-flamengo')" title="Flamengo">
+                                <img src="/static/themes/flamengo.svg" alt="Flamengo" />
+                            </div>
+                            <div class="theme-thumb" onclick="alterarTema('theme-botafogo')" title="Botafogo">
+                                <img src="/static/themes/botafogo.svg" alt="Botafogo" />
+                            </div>
+                            <div class="theme-thumb" onclick="alterarTema('theme-vasco')" title="Vasco">
+                                <img src="/static/themes/vasco.svg" alt="Vasco" />
+                            </div>
+                            <div class="theme-thumb" onclick="alterarTema('theme-fluminense')" title="Fluminense">
+                                <img src="/static/themes/fluminense.svg" alt="Fluminense" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botão de confirmar criação (inicialmente oculto) -->
+                <div id="criar-sala-final" class="hidden">
+                    <button class="btn btn-success btn-large" onclick="criarSala()">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Confirmar e Criar Sala
+                    </button>
+                </div>
+
+                <!-- Seção para entrar em sala (inicialmente oculta) -->
+                <div id="entrar-sala-section" class="hidden">
+                    <div class="input-group">
+                        <label for="codigo-input">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
+                                </path>
+                            </svg>
+                            Código da sala:
+                        </label>
+                        <input type="text" id="codigo-input" placeholder="Digite o código da sala" maxlength="6"
+                            autocomplete="off">
+                    </div>
+                    <button class="btn btn-success btn-large" onclick="entrarSala()">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Entrar na Sala
+                    </button>
+                </div>
+            </div>
+
+
+
+        </div>
+    </div>
+
+    <!-- Modal de Sala Criada -->
+    <div id="modal-sala-criada" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>
+                    <svg class="icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Sala Criada!
+                </h2>
+            </div>
+            <div class="modal-body">
+                <div class="room-info">
+                    <p>Olá, <strong id="nome-jogador"></strong>!</p>
+                    <p class="text-muted">Código da sala:</p>
+                    <div class="room-code">
+                        <div class="code-display" id="codigo-sala"></div>
+                        <button class="copy-btn" onclick="copiarCodigo()" title="Copiar código">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z">
+                                </path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="config-summary">
+                        <p><strong>Configurações:</strong></p>
+                        <p>Máximo de jogadores: <span id="config-max-jogadores"></span></p>
+                        <p>Número de palavras: <span id="config-num-palavras"></span></p>
+                    </div>
+                    <div class="waiting-spinner"></div>
+                    <p id="status-aguardando">Aguardando jogadores...</p>
+                    <p class="text-muted">Compartilhe o código com seus amigos!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast para notificações -->
+    <div id="toast" class="toast"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        let socket;
+
+        // Inicializar Socket.IO
+        document.addEventListener('DOMContentLoaded', function () {
+            socket = io();
+
+            socket.on('connect', function () {
+                console.log('Conectado ao servidor');
+            });
+
+            socket.on('sala_criada', function (data) {
+                console.log('Sala criada:', data);
+                document.getElementById('nome-jogador').textContent = data.nome;
+                document.getElementById('codigo-sala').textContent = data.codigo;
+                document.getElementById('config-max-jogadores').textContent = data.config.max_jogadores;
+                document.getElementById('config-num-palavras').textContent = data.config.num_palavras;
+                document.getElementById('modal-sala-criada').classList.remove('hidden');
+
+                // Redirecionar para a sala após um tempo
+                setTimeout(() => {
+                    window.location.href = `/sala/${data.codigo}?jogador=${encodeURIComponent(data.nome)}&num_palavras=${data.config.num_palavras}`;
+                }, 2000);
+            });
+
+            socket.on('erro', function (data) {
+                console.error('Erro:', data);
+                mostrarToast(data.msg, 'error');
+            });
+        });
+        function mostrarToast(mensagem, tipo = "info") {
+            const toast = document.getElementById("toast");
+            toast.textContent = mensagem;
+            toast.className = `toast ${tipo} show`;
+
+            setTimeout(() => {
+                toast.classList.remove("show");
+            }, 3000);
+        }
+
+        function mostrarConfiguracoes() {
+            const nome = document.getElementById("nome-input").value.trim();
+
+            if (!nome) {
+                mostrarToast("Por favor, digite seu nome primeiro!", "error");
+                document.getElementById("nome-input").focus();
+                return;
+            }
+
+            if (nome.length > 20) {
+                mostrarToast("Nome deve ter no máximo 20 caracteres!", "error");
+                return;
+            }
+
+            // Mostrar configurações
+            document.getElementById("config-section").classList.remove("hidden");
+            document.getElementById("criar-sala-final").classList.remove("hidden");
+
+            // Esconder botões iniciais
+            document.querySelector(".main-actions").classList.add("hidden");
+        }
+        function mostrarAvatares() {
+            document.getElementById("config-section").classList.remove("hidden");
+            document.getElementById("criar-sala-final").classList.remove("hidden");
+        }
+
+        function mostrarEntrarSala() {
+            const nome = document.getElementById("nome-input").value.trim();
+
+            if (!nome) {
+                mostrarToast("Por favor, digite seu nome primeiro!", "error");
+                document.getElementById("nome-input").focus();
+                return;
+            }
+
+            if (nome.length > 20) {
+                mostrarToast("Nome deve ter no máximo 20 caracteres!", "error");
+                return;
+            }
+
+            const section = document.getElementById("entrar-sala-section");
+            section.classList.toggle("hidden");
+
+            if (!section.classList.contains("hidden")) {
+                document.getElementById("codigo-input").focus();
+            }
+
+        }
+
+        function criarSala() {
+            const nome = document.getElementById("nome-input").value.trim();
+            const maxJogadores = parseInt(document.getElementById("max-jogadores").value);
+            const numPalavras = parseInt(document.getElementById("num-palavras").value);
+
+            if (!nome) {
+                mostrarToast("Por favor, digite seu nome!", "error");
+                return;
+            }
+
+            // Enviar dados para o servidor via Socket.IO
+            socket.emit('criar_sala', {
+                nome: nome,
+                num_palavras: numPalavras,
+                max_jogadores: maxJogadores
+            });
+
+            mostrarToast("Criando sala...", "info");
+        }
+
+        function entrarSala() {
+            const nome = document.getElementById("nome-input").value.trim();
+            const codigo = document.getElementById("codigo-input").value.trim().toUpperCase();
+
+            if (!codigo) {
+                mostrarToast("Por favor, digite o código da sala!", "error");
+                document.getElementById("codigo-input").focus();
+                return;
+            }
+
+            if (codigo.length !== 6) {
+                mostrarToast("Código da sala deve ter 6 caracteres!", "error");
+                return;
+            }
+
+            // Redirecionar para a sala
+            window.location.href = `/sala/${codigo}?jogador=${encodeURIComponent(nome)}`;
+        }
+
+        function copiarCodigo() {
+            const codigo = document.getElementById("codigo-sala").textContent;
+            navigator.clipboard.writeText(codigo).then(() => {
+                mostrarToast("Código copiado!", "success");
+            }).catch(() => {
+                // Fallback para navegadores mais antigos
+                const textArea = document.createElement("textarea");
+                textArea.value = codigo;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                mostrarToast("Código copiado!", "success");
+            });
+        }
+
+        // Atualizar valores dos sliders
+        function atualizarSliders() {
+            const maxJogadores = document.getElementById("max-jogadores");
+            const numPalavras = document.getElementById("num-palavras");
+
+            document.getElementById("max-jogadores-value").textContent = maxJogadores.value;
+            document.getElementById("num-palavras-value").textContent = numPalavras.value;
+        }
+
+        // Event listeners
+        document.getElementById("nome-input").addEventListener("keypress", function (e) {
+            if (e.key === "Enter") {
+                mostrarConfiguracoes();
+            }
+        });
+
+        document.getElementById("codigo-input").addEventListener("keypress", function (e) {
+            if (e.key === "Enter") {
+                entrarSala();
+            }
+        });
+
+        // Converter código para maiúsculo automaticamente
+        document.getElementById("codigo-input").addEventListener("input", function (e) {
+            e.target.value = e.target.value.toUpperCase();
+        });
+
+        // Atualizar valores dos sliders
+        document.getElementById("max-jogadores").addEventListener("input", atualizarSliders);
+        document.getElementById("num-palavras").addEventListener("input", atualizarSliders);
+
+        // Fechar modal ao clicar fora
+        document.getElementById("modal-sala-criada").addEventListener("click", function (e) {
+            if (e.target === this) {
+                this.classList.add("hidden");
+            }
+        });
+
+        // Inicializar valores dos sliders
+        atualizarSliders();
+
+        // Função para alterar o tema
+        function alterarTema(tema) {
+            document.body.className = tema;
+            localStorage.setItem('tema', tema);
+            mostrarToast(`Tema alterado para: ${tema.replace('theme-', '').charAt(0).toUpperCase() + tema.replace('theme-', '').slice(1)}`, 'success');
+        }
+
+        // Aplicar tema salvo imediatamente
+        (function () {
+            const temaSalvo = localStorage.getItem('tema') || 'theme-dark';
+            document.documentElement.className = temaSalvo;
+        })();
+
+        // Função para abrir/fechar o dropdown de temas
+        function toggleThemeMenu() {
+            const menu = document.getElementById("theme-menu");
+            menu.classList.toggle("hidden");
+        }
+
+        // (Opcional) Fecha o menu se clicar fora dele
+        document.addEventListener("click", function (e) {
+            const themeBtn = document.getElementById("theme-btn");
+            const themeMenu = document.getElementById("theme-menu");
+            if (!themeBtn.contains(e.target) && !themeMenu.contains(e.target)) {
+                themeMenu.classList.add("hidden");
+            }
+        });
+
+    </script>
+</body>
+
+</html>
