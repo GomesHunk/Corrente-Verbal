@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: jogo-5-palavras
+    name: corrente-verbal
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn -c gunicorn.conf.py app:app
