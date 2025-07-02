@@ -437,6 +437,8 @@
                 console.log('Jogo iniciado:', data);
                 mostrarToast(data.msg, 'success');
                 estadoJogo = data.estado;
+                const criadorSid = estadoJogo.criador;
+                const meuSid = socket.id;
                 mostrarSecao('secao-jogo');
                 atualizarInterfaceJogo();
             });
@@ -534,6 +536,17 @@
                     <label for="palavra-${i}">Palavra ${i}:</label>
                     <input type="text" id="palavra-${i}" placeholder="Digite a palavra ${i}" maxlength="30" autocomplete="off">
                 `;
+                // Se eu sou o criador e este não é meu próprio nome...
+                if (meuSid === criadorSid && jogador.nome !== /* seu nome */ meuNome) {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-sm btn-danger ml-2';
+                    btn.textContent = '🛑';
+                    // você pode usar jogador.sid se já tiver enviado do servidor,
+                    // ou simplesmente usar jogador.nome e adaptar o back-end para mapear
+                    btn.onclick = () => expulsarJogador(jogador.nome);
+                    playerDiv.appendChild(btn);
+                }
+
                 container.appendChild(div);
             }
 
@@ -1165,7 +1178,37 @@
             }
         });
 
+        function expulsarJogador(nomeJogador) {
+            socket.emit('expulsar_jogador', {
+                sala: codigoSala,       // variável que você já definiu no topo
+                nome: nomeJogador       // vamos enviar o nome, o servidor irá mapear para SID
+            });
+        }
 
+        // → Recebe TODO o estado da sala (incluindo palavras já enviadas)
+
+        socket.on('estado_atual', function (data) {
+            // Só faz sentido na tela de definição de palavras
+            const secaoPalavras = document.getElementById('secao-palavras');
+            if (secaoPalavras && !secaoPalavras.classList.contains('hidden')) {
+                const minhasPalavras = data.palavras[socket.id] || [];
+                minhasPalavras.forEach((palavra, idx) => {
+                    const input = document.getElementById(`palavra-${idx + 1}`);
+                    if (input) input.value = palavra;
+                });
+                // Se já houve envio, bloqueia o botão
+                if (minhasPalavras.length === parseInt(data.config.num_palavras)) {
+                    const btn = document.getElementById('btn-enviar-palavras');
+                    btn.disabled = true;
+                    btn.textContent = 'Palavras Enviadas ✓';
+                }
+            }
+        });
+
+        socket.on('foi_expulso', () => {
+            alert('Você foi expulso pelo criador da sala.');
+            window.location.href = '/';
+        });
     </script>
 </body>
 

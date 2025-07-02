@@ -12,7 +12,7 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'jogo_das_palavras_secre
 socketio = SocketIO(
     app, 
     cors_allowed_origins="*",
-    ping_timeout=60,
+    ping_timeout=120,
     ping_interval=25,
     logger=False,
     engineio_logger=False
@@ -49,138 +49,134 @@ def criar_sala(data):
         nome = data.get('nome', '').strip()
         num_palavras = int(data.get('num_palavras', 5))
         max_jogadores = int(data.get('max_jogadores', 2))
-        
+
+        # Validações básicas
         if not nome:
             emit('erro', {'msg': 'Nome é obrigatório'})
             return
-        
         if len(nome) > 20:
             emit('erro', {'msg': 'Nome deve ter no máximo 20 caracteres'})
             return
-        
-        # Gerar código da sala
-        import random
-        import string
+
+        # Gera código único de 6 dígitos
+        import random, string
         codigo = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-        
-        # Criar configuração e partida
+
+        # Cria configuração e partida
         config = Configuracao(num_palavras, max_jogadores)
         partida = PartidaMultiplayer(config)
         partida.codigo_sala = codigo
-        
-        # Criar jogador e adicionar à partida
+
+        # Cria jogador e adiciona à partida
         jogador = Jogador(nome, num_palavras)
         partida.adicionar_jogador(jogador)
-        
-        # Salvar sala
+
+        # === Atualização: salva o estado da sala com SID do criador e mapa de players ===
         salas[codigo] = {
             'partida': partida,
-            'criador': nome
+            'criador': request.sid,       # SID do socket que criou
+            'players': {                  # map SID → nome
+                request.sid: nome
+            },
+            'palavras': {}                # opcional, se usada
         }
-        
+
+        # Entra na sala (Socket.IO room)
         join_room(codigo)
-        
+
+        # Emite confirmação de criação, incluindo players e criador
         emit('sala_criada', {
             'codigo': codigo,
             'nome': nome,
             'config': {
                 'num_palavras': num_palavras,
                 'max_jogadores': max_jogadores
-
-            }
+            },
+            'players': salas[codigo]['players'],
+            'criador': salas[codigo]['criador']
         })
-        
-        logger.info(f'Sala {codigo} criada por {nome} - {num_palavras} palavras, {max_jogadores} jogadores')
-        
+
+        logger.info(f'Sala {codigo} criada por {nome} ({request.sid}) '
+                    f'- {num_palavras} palavras, {max_jogadores} jogadores')
+
     except Exception as e:
         logger.error(f'Erro ao criar sala: {str(e)}')
         emit('erro', {'msg': 'Erro interno do servidor'})
 
-@socketio.on('entrar_na_sala')
-def entrar_na_sala(data):
+@socketio.on('entrar_sala')
+def entrar_sala(data):
     try:
-        sala = data.get('sala', '').strip().upper()
+        codigo = data.get('sala')
         nome = data.get('nome', '').strip()
-        
-        if not sala or not nome:
-            emit('erro', {'msg': 'Nome e código da sala são obrigatórios'})
-            return
-        
-        if len(nome) > 20:
-            emit('erro', {'msg': 'Nome deve ter no máximo 20 caracteres'})
-            return
-        
-        if sala not in salas:
+
+        # 1) Validações
+        if not codigo or codigo not in salas:
             emit('erro', {'msg': 'Sala não encontrada'})
             return
-        
-        partida = salas[sala]['partida']
-        
-        # Verificar se o jogador já está na sala (reconexão)
-        jogador_existente = None
-        for jogador in partida.jogadores:
-            if jogador.nome == nome:
-                jogador_existente = jogador
-                break
-        
-        if jogador_existente:
-            # Reconexão
-            join_room(sala)
-            logger.info(f'Jogador {nome} reconectou na sala {sala}')
-            
-            if partida.jogo_iniciado:
-                estado = partida.get_estado_jogo()
-                emit('jogo_iniciado', {
-                    'msg': 'Reconectado ao jogo em andamento!',
-                    'estado': estado
-                })
-            else:
-                emit('aguardando_jogadores', {
-                    'msg': f'Reconectado! Aguardando jogadores ({len(partida.jogadores)}/{partida.config.max_jogadores})',
-                    'jogadores': [j.nome for j in partida.jogadores],
-                    'config': {
-                        'num_palavras': partida.config.num_palavras,
-                        'max_jogadores': partida.config.max_jogadores
-                    }
-                })
+        if not nome:
+            emit('erro', {'msg': 'Nome é obrigatório'})
             return
-        
-        # Novo jogador
-        if len(partida.jogadores) >= partida.config.max_jogadores:
-            emit('erro', {'msg': f'Sala cheia (máximo {partida.config.max_jogadores} jogadores)'})
-            return
-        
-        # Adicionar novo jogador
-        jogador = Jogador(nome, partida.config.num_palavras)
-        partida.adicionar_jogador(jogador)
-        
-        join_room(sala)
-        
-        logger.info(f'Jogador {nome} entrou na sala {sala} ({len(partida.jogadores)}/{partida.config.max_jogadores})')
-        
-        # Notificar todos na sala
-        emit('jogador_entrou', {
-            'jogador': nome,
-            'total': len(partida.jogadores),
-            'max': partida.config.max_jogadores,
-            'jogadores': [j.nome for j in partida.jogadores]
-        }, room=sala)
-        
-        # Se atingiu o mínimo de jogadores, permitir início
-        if len(partida.jogadores) >= 2:
-            emit('pode_comecar', {
-                'msg': f'Sala pronta! {len(partida.jogadores)} jogadores conectados.',
-                'jogadores': [j.nome for j in partida.jogadores],
-                'config': {
-                    'num_palavras': partida.config.num_palavras,
-                    'max_jogadores': partida.config.max_jogadores
-                }
-            }, room=sala)
-        
+
+        # 2) Adiciona o jogador à room e ao estado
+        join_room(codigo)
+        salas[codigo]['players'][request.sid] = nome
+
+        # 3) Envia só para quem acabou de entrar TODO o estado da sala,
+        # incluindo as palavras que já foram submetidas
+        emit('estado_atual', {
+            'codigo': codigo,
+            'config': {
+                'num_palavras':   salas[codigo]['partida'].config.num_palavras,
+                'max_jogadores':  salas[codigo]['partida'].config.max_jogadores
+            },
+            'players': salas[codigo]['players'],         # mapeamento sid → nome
+            'criador': salas[codigo]['criador'],         # sid do criador
+            'palavras': salas[codigo].get('palavras', {}) # mapeamento sid → lista de palavras
+        }, room=request.sid)
+
+        # 4) Notifica os demais jogadores que houve uma nova entrada
+        emit('novo_jogador', {
+            'sid':  request.sid,
+            'nome': nome
+        }, room=codigo, include_self=False)
+
+        logger.info(f'Jogador {nome} ({request.sid}) entrou na sala {codigo}')
+
     except Exception as e:
         logger.error(f'Erro ao entrar na sala: {str(e)}')
         emit('erro', {'msg': 'Erro interno do servidor'})
 
+
+@socketio.on('expulsar_jogador')
+def expulsar_jogador(data):
+    sala = data['sala']                # o código/nome da sala
+    alvo_sid = data['sid']             # o socket ID do jogador a expulsar
+    criador_sid = salas[sala]['criador']  # extraia do seu dicionário quem criou a sala
+
+    # Só o criador pode mandar expulsar
+    if request.sid != criador_sid:
+        return
+
+    # Notifica o alvo
+    emit('foi_expulso', {}, room=alvo_sid)
+
+    # Remove o alvo da sala e desconecta
+    leave_room(sala, sid=alvo_sid)
+    socketio.server.disconnect(alvo_sid)
+
+@socketio.on('submit_palavras')
+def submit_palavras(data):
+    codigo = data['sala']
+    lista_palavras = data['palavras']    # ex: ['casa','gato',…]
+    # Armazena no dicionário, sem apagar o que já existe
+    salas[codigo]['palavras'][request.sid] = lista_palavras
+
+    # (Opcional) Notificar os demais de quem já enviou
+    emit('palavras_atualizadas', {
+        'sid': request.sid,
+        'palavras': lista_palavras
+    }, room=codigo)
+    
 @socketio.on('enviar_palavras')
 def receber_palavras(data):
     try:
@@ -493,7 +489,6 @@ def enviar_emoji(data):
         }, room=sala)
         
         logger.info(f'Emoji {emoji} enviado por {nome} na sala {sala}')
-        
     except Exception as e:
         logger.error(f'Erro ao enviar emoji: {str(e)}')
         emit('erro', {'msg': 'Erro interno do servidor'})
