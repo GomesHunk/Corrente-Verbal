@@ -103,13 +103,12 @@ def criar_sala(data):
         logger.error(f'Erro ao criar sala: {str(e)}')
         emit('erro', {'msg': 'Erro interno do servidor'})
 
-@socketio.on('entrar_sala')
-def entrar_sala(data):
+@socketio.on('entrar_na_sala')
+def entrar_na_sala(data):
     try:
-        codigo = data.get('sala')
+        codigo = data.get('sala', '').strip().upper()
         nome = data.get('nome', '').strip()
 
-        # 1) Validações
         if not codigo or codigo not in salas:
             emit('erro', {'msg': 'Sala não encontrada'})
             return
@@ -117,31 +116,50 @@ def entrar_sala(data):
             emit('erro', {'msg': 'Nome é obrigatório'})
             return
 
-        # 2) Adiciona o jogador à room e ao estado
+        partida = salas[codigo]['partida']
+
+        # Verifica se o jogador já está na sala (pelo nome)
+        jogador_existente = next((j for j in partida.jogadores if j.nome.lower() == nome.lower()), None)
+
+        if not jogador_existente:
+            # É um novo jogador
+            if len(partida.jogadores) >= partida.config.max_jogadores:
+                emit('erro', {'msg': 'A sala está cheia.'})
+                return
+            
+            # Adiciona o novo jogador
+            jogador = Jogador(nome, partida.config.num_palavras)
+            partida.adicionar_jogador(jogador)
+            logger.info(f'Jogador {nome} ({request.sid}) entrou na sala {codigo}')
+        else:
+            # É o criador ou um jogador reconectando
+            logger.info(f'Jogador {nome} ({request.sid}) (re)conectou-se à sala {codigo}')
+
         join_room(codigo)
         salas[codigo]['players'][request.sid] = nome
 
-        # 3) Envia só para quem acabou de entrar TODO o estado da sala,
-        # incluindo as palavras que já foram submetidas
-        emit('estado_atual', {
-            'codigo': codigo,
-            'config': {
-                'num_palavras':   salas[codigo]['partida'].config.num_palavras,
-                'max_jogadores':  salas[codigo]['partida'].config.max_jogadores
-            },
-            'players': salas[codigo]['players'],         # mapeamento sid → nome
-            'criador': salas[codigo]['criador'],         # sid do criador
-            'palavras': salas[codigo].get('palavras', {}) # mapeamento sid → lista de palavras
-        }, room=request.sid)
+        # Notifica todos na sala sobre o estado atual
+        jogadores_nomes = [j.nome for j in partida.jogadores]
+        emit('jogador_entrou', {
+            'jogadores': jogadores_nomes,
+            'total': len(partida.jogadores),
+            'max': partida.config.max_jogadores
+        }, room=codigo)
 
-        # 4) Notifica os demais jogadores que houve uma nova entrada
-        emit('novo_jogador', {
-            'sid':  request.sid,
-            'nome': nome
-        }, room=codigo, include_self=False)
+        # Se a sala estiver cheia, avisa que pode começar
+        if len(partida.jogadores) == partida.config.max_jogadores:
+            emit('pode_comecar', {
+                'msg': 'Sala cheia! Todos devem definir suas palavras.',
+                'jogadores': jogadores_nomes,
+                'config': {
+                    'num_palavras': partida.config.num_palavras,
+                    'max_jogadores': partida.config.max_jogadores
+                }
+            }, room=codigo)
 
-        logger.info(f'Jogador {nome} ({request.sid}) entrou na sala {codigo}')
-
+    except ValueError as e:
+        logger.error(f'Erro ao entrar na sala {codigo}: {str(e)}')
+        emit('erro', {'msg': str(e)})
     except Exception as e:
         logger.error(f'Erro ao entrar na sala: {str(e)}')
         emit('erro', {'msg': 'Erro interno do servidor'})

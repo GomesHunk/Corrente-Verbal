@@ -99,6 +99,8 @@
                 </h2>
                 <div class="waiting-spinner"></div>
                 <p id="status-sala">Conectando...</p>
+                <!-- Lista de jogadores na sala de espera -->
+                <div id="lista-jogadores-aguardando" class="players-list" style="justify-content: center; margin-top: 1rem; flex-wrap: wrap; gap: 0.5rem;"></div>
                 <div class="room-code">
                     <span class="text-muted">Código da sala:</span>
                     <div class="code-display" id="codigo-atual"></div>
@@ -361,22 +363,12 @@
             socket.on('connect', function () {
                 console.log('Conectado ao servidor');
 
-                // Verificar se é criação ou entrada
-                const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.has('max_jogadores')) {
-                    // Criar sala
-                    socket.emit('criar_sala', {
-                        nome: meuNome,
-                        num_palavras: numPalavras,
-                        max_jogadores: parseInt(urlParams.get('max_jogadores'))
-                    });
-                } else {
-                    // Entrar em sala existente
-                    socket.emit('entrar_na_sala', {
-                        sala: codigoSala,
-                        nome: meuNome
-                    });
-                }
+                // A sala já foi criada na página inicial.
+                // Ao carregar esta página, o objetivo é sempre ENTRAR na sala.
+                socket.emit('entrar_na_sala', {
+                    sala: codigoSala,
+                    nome: meuNome
+                });
             });
 
             // Listener para emojis recebidos
@@ -395,18 +387,20 @@
                 console.log('Sala criada:', data);
                 document.getElementById('status-sala').textContent = `Sala criada! Aguardando jogadores... (1/${data.config.max_jogadores})`;
                 document.getElementById('config-info').textContent = `${data.config.num_palavras} palavras • Máx. ${data.config.max_jogadores} jogadores`;
+                // Mostra o criador na lista de espera
+                atualizarListaJogadoresAguardando([meuNome]);
             });
 
             socket.on('jogador_entrou', function (data) {
                 console.log('Jogador entrou:', data);
                 document.getElementById('status-sala').textContent = `${data.total}/${data.max} jogadores conectados`;
-                atualizarListaJogadores(data.jogadores);
+                atualizarListaJogadoresAguardando(data.jogadores);
             });
 
             socket.on('pode_comecar', function (data) {
                 console.log('Pode começar:', data);
                 document.getElementById('status-sala').textContent = data.msg;
-                atualizarListaJogadores(data.jogadores);
+                atualizarListaJogadoresAguardando(data.jogadores);
 
                 // Atualizar configuração para todos os jogadores
                 if (data.config) {
@@ -730,6 +724,19 @@
                 }
 
                 lista.appendChild(span);
+            });
+        }
+
+        function atualizarListaJogadoresAguardando(jogadores) {
+            const container = document.getElementById('lista-jogadores-aguardando');
+            if (!container) return;
+            container.innerHTML = '';
+            jogadores.forEach(nome => {
+                const chip = document.createElement('div');
+                chip.className = 'player-chip';
+                // Adiciona um ícone para cada jogador na lista de espera
+                chip.innerHTML = `👤 ${nome}`;
+                container.appendChild(chip);
             });
         }
 
