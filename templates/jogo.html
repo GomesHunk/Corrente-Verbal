@@ -379,7 +379,28 @@
 
             socket.on('disconnect', function () {
                 console.log('Desconectado do servidor');
-                mostrarToast('Conexão perdida. Tentando reconectar...', 'warning');
+                mostrarToast('Conexão perdida. Tentando reconectar automaticamente...', 'warning');
+                
+                // Tentativas de reconexão com backoff exponencial
+                let tentativas = 0;
+                const tentarReconectar = function() {
+                    if (!socket.connected && tentativas < 10) {
+                        setTimeout(function() {
+                            tentativas++;
+                            mostrarToast(`Tentando reconectar (${tentativas}/10)...`, 'warning');
+                            socket.connect();
+                            
+                            if (!socket.connected) {
+                                // Aumentar tempo entre tentativas (backoff exponencial)
+                                tentarReconectar();
+                            }
+                        }, Math.min(1000 * Math.pow(1.5, tentativas), 10000)); // Máximo 10 segundos
+                    } else if (!socket.connected) {
+                        mostrarToast('Falha na reconexão. Atualize a página.', 'error');
+                    }
+                };
+                
+                tentarReconectar();
             });
 
             // Eventos do jogo
@@ -1002,6 +1023,9 @@
 
             const container = document.getElementById('todos-jogadores-container');
             container.innerHTML = '';
+            
+            // Verificar se sou o criador
+            const sou_criador = estadoJogo.criador === socket.id;
 
             estadoJogo.jogadores.forEach(jogador => {
                 const playerDiv = document.createElement('div');
@@ -1019,16 +1043,32 @@
                 // Encontrar quem é o alvo deste jogador
                 const nomeAlvo = jogador.alvo || '---';
 
-                playerDiv.innerHTML = `
-                    <div class="player-header">
-                        <h5>${icone} ${jogador.nome}${status}</h5>
-                        <span class="player-progress">${descobertas}/${total}</span>
-                    </div>
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'player-header';
+                headerDiv.innerHTML = `
+                    <h5>${icone} ${jogador.nome}${status}</h5>
+                    <span class="player-progress">${descobertas}/${total}</span>
+                `;
+                
+                // Se sou o criador e não é meu próprio nome, adicionar botão de expulsar
+                if (sou_criador && jogador.nome !== meuNome) {
+                    const btnExpulsar = document.createElement('button');
+                    btnExpulsar.className = 'btn btn-sm btn-danger';
+                    btnExpulsar.innerHTML = '🛑';
+                    btnExpulsar.title = 'Expulsar jogador';
+                    btnExpulsar.onclick = () => expulsarJogador(jogador.nome);
+                    headerDiv.appendChild(btnExpulsar);
+                }
+                
+                playerDiv.appendChild(headerDiv);
+
+                // Resto do conteúdo do jogador
+                playerDiv.innerHTML += `
                     <div class="player-target-info">
                         <span class="target-label">Adivinhando palavras de:</span>
                         <span class="target-name">${nomeAlvo}</span>
                     </div>
-                    <div class="player-words-grid" id="player-${jogador.nome}-grid">
+                    <div class="player-words-grid" id="player-${jogador.nome.replace(/\s+/g, '_')}-grid">
                         <!-- Palavras serão geradas -->
                     </div>
                 `;
@@ -1036,7 +1076,7 @@
                 container.appendChild(playerDiv);
 
                 // Gerar grid de palavras para este jogador (palavras do seu alvo)
-                const grid = document.getElementById(`player-${jogador.nome}-grid`);
+                const grid = document.getElementById(`player-${jogador.nome.replace(/\s+/g, '_')}-grid`);
                 for (let i = 0; i < total; i++) {
                     const wordDiv = document.createElement('div');
                     wordDiv.className = 'mini-word-card';
@@ -1185,37 +1225,15 @@
             }
         });
 
+        // Função para expulsar jogador por nome
         function expulsarJogador(nomeJogador) {
-            socket.emit('expulsar_jogador', {
-                sala: codigoSala,       // variável que você já definiu no topo
-                nome: nomeJogador       // vamos enviar o nome, o servidor irá mapear para SID
-            });
-        }
-
-        // → Recebe TODO o estado da sala (incluindo palavras já enviadas)
-
-        socket.on('estado_atual', function (data) {
-            // Só faz sentido na tela de definição de palavras
-            const secaoPalavras = document.getElementById('secao-palavras');
-            if (secaoPalavras && !secaoPalavras.classList.contains('hidden')) {
-                const minhasPalavras = data.palavras[socket.id] || [];
-                minhasPalavras.forEach((palavra, idx) => {
-                    const input = document.getElementById(`palavra-${idx + 1}`);
-                    if (input) input.value = palavra;
+            if (confirm(`Tem certeza que deseja expulsar ${nomeJogador}?`)) {
+                socket.emit('expulsar_jogador', {
+                    sala: codigoSala,
+                    nome: nomeJogador
                 });
-                // Se já houve envio, bloqueia o botão
-                if (minhasPalavras.length === parseInt(data.config.num_palavras)) {
-                    const btn = document.getElementById('btn-enviar-palavras');
-                    btn.disabled = true;
-                    btn.textContent = 'Palavras Enviadas ✓';
-                }
             }
-        });
-
-        socket.on('foi_expulso', () => {
-            alert('Você foi expulso pelo criador da sala.');
-            window.location.href = '/';
-        });
+        }
     </script>
 </body>
 

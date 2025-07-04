@@ -291,22 +291,37 @@
 
         }
 
+        // No formulário de criar sala, tornar o número de jogadores opcional
+        const maxJogadoresGroup = document.getElementById("max-jogadores-group");
+        if (maxJogadoresGroup) {
+            maxJogadoresGroup.style.display = "flex";
+            maxJogadoresGroup.style.alignItems = "center";
+        }
+
         function criarSala() {
             const nome = document.getElementById("nome-input").value.trim();
-            const maxJogadores = parseInt(document.getElementById("max-jogadores").value);
             const numPalavras = parseInt(document.getElementById("num-palavras").value);
+            // Tornar max_jogadores opcional - somente enviar se for diferente do padrão
+            const maxJogadores = parseInt(document.getElementById("max-jogadores").value);
 
             if (!nome) {
                 mostrarToast("Por favor, digite seu nome!", "error");
                 return;
             }
 
-            // Enviar dados para o servidor via Socket.IO
-            socket.emit('criar_sala', {
+            // Objeto de dados com os campos obrigatórios
+            const dados = {
                 nome: nome,
-                num_palavras: numPalavras,
-                max_jogadores: maxJogadores
-            });
+                num_palavras: numPalavras
+            };
+
+            // Adicionar max_jogadores somente se não for o valor padrão (8)
+            if (maxJogadores !== 8) {
+                dados.max_jogadores = maxJogadores;
+            }
+
+            // Enviar dados para o servidor via Socket.IO
+            socket.emit('criar_sala', dados);
 
             mostrarToast("Criando sala...", "info");
         }

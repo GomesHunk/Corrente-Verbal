@@ -1,7 +1,7 @@
 from normalizador import NormalizadorTexto
 
 class Configuracao:
-    def __init__(self, num_palavras=5, max_jogadores=2):
+    def __init__(self, num_palavras=5, max_jogadores=8):
         self.num_palavras = max(4, min(8, num_palavras))  # Entre 4 e 8
         self.max_jogadores = max(2, min(8, max_jogadores))  # Entre 2 e 8
 
@@ -254,6 +254,10 @@ class PartidaMultiplayer:
             'mensagem': mensagem.strip(),
             'timestamp': datetime.datetime.now().strftime('%H:%M:%S')
         })
+        
+        # Manter apenas as últimas 50 mensagens
+        if len(self.mensagens_chat) > 50:
+            self.mensagens_chat = self.mensagens_chat[-50:]
 
     def get_estado_jogo(self):
         """Retorna o estado atual do jogo"""
