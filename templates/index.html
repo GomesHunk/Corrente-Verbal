@@ -43,7 +43,28 @@
                         </svg>
                         Seu nome:
                     </label>
-                    <input type="text" id="nome-input" placeholder="Digite seu nome" maxlength="20" autocomplete="off">
+                    <div class="name-avatar-container">
+                        <input type="text" id="nome-input" placeholder="Digite seu nome" maxlength="20" autocomplete="off">
+                        <div class="avatar-selector">
+                            <div class="avatar-current" id="avatar-current" onclick="toggleAvatarMenu()">
+                                <span class="avatar-emoji">👤</span>
+                            </div>
+                            <div class="avatar-dropdown hidden" id="avatar-dropdown">
+                                <div class="avatar-option" onclick="selecionarAvatar('👤')" data-avatar="👤">👤</div>
+                                <div class="avatar-option" onclick="selecionarAvatar('😊')" data-avatar="😊">😊</div>
+                                <div class="avatar-option" onclick="selecionarAvatar('😎')" data-avatar="😎">😎</div>
+                                <div class="avatar-option" onclick="selecionarAvatar('🚀')" data-avatar="🚀">🚀</div>
+                                <div class="avatar-option" onclick="selecionarAvatar('⚡')" data-avatar="⚡">⚡</div>
+                                <div class="avatar-option" onclick="selecionarAvatar('🎮')" data-avatar="🎮">🎮</div>
+                                <div class="avatar-option" onclick="selecionarAvatar('🔥')" data-avatar="🔥">🔥</div>
+                                <div class="avatar-option" onclick="selecionarAvatar('💎')" data-avatar="💎">💎</div>
+                                <div class="avatar-option" onclick="selecionarAvatar('🌟')" data-avatar="🌟">🌟</div>
+                                <div class="avatar-option" onclick="selecionarAvatar('🎯')" data-avatar="🎯">🎯</div>
+                                <div class="avatar-option" onclick="selecionarAvatar('🏆')" data-avatar="🏆">🏆</div>
+                                <div class="avatar-option" onclick="selecionarAvatar('🎪')" data-avatar="🎪">🎪</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Configurações da Sala (inicialmente oculta) -->
@@ -51,17 +72,25 @@
                     <h3>Configurações da Sala</h3>
                     <div class="config-section">
                         <div class="config-item">
-                            <label for="max-jogadores">Máximo de jogadores:</label>
+                            <label for="max-jogadores">
+                                <span>Máximo de jogadores:</span>
+                                <small class="config-help">Suporte de 2 até 10 jogadores simultâneos</small>
+                            </label>
                             <div class="range-input">
-                                <input type="range" id="max-jogadores" min="2" max="8" value="2">
-                                <span class="range-value" id="max-jogadores-value">2</span>
+                                <input type="range" id="max-jogadores" min="2" max="10" value="4">
+                                <span class="range-value" id="max-jogadores-value">4</span>
+                                <span class="range-label">jogadores</span>
                             </div>
                         </div>
                         <div class="config-item">
-                            <label for="num-palavras">Número de palavras:</label>
+                            <label for="num-palavras">
+                                <span>Número de palavras:</span>
+                                <small class="config-help">Quantas palavras cada jogador deve adivinhar</small>
+                            </label>
                             <div class="range-input">
                                 <input type="range" id="num-palavras" min="4" max="8" value="5">
                                 <span class="range-value" id="num-palavras-value">5</span>
+                                <span class="range-label">palavras</span>
                             </div>
                         </div>
                     </div>
@@ -159,46 +188,8 @@
         </div>
     </div>
 
-    <!-- Modal de Sala Criada -->
-    <div id="modal-sala-criada" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>
-                    <svg class="icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    Sala Criada!
-                </h2>
-            </div>
-            <div class="modal-body">
-                <div class="room-info">
-                    <p>Olá, <strong id="nome-jogador"></strong>!</p>
-                    <p class="text-muted">Código da sala:</p>
-                    <div class="room-code">
-                        <div class="code-display" id="codigo-sala"></div>
-                        <button class="copy-btn" onclick="copiarCodigo()" title="Copiar código">
-                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z">
-                                </path>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="config-summary">
-                        <p><strong>Configurações:</strong></p>
-                        <p>Máximo de jogadores: <span id="config-max-jogadores"></span></p>
-                        <p>Número de palavras: <span id="config-num-palavras"></span></p>
-                    </div>
-                    <div class="waiting-spinner"></div>
-                    <p id="status-aguardando">Aguardando jogadores...</p>
-                    <p class="text-muted">Compartilhe o código com seus amigos!</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Toast para notificações -->
+    <div id="toast" class="toast"></div>
     <div id="toast" class="toast"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
@@ -215,16 +206,22 @@
 
             socket.on('sala_criada', function (data) {
                 console.log('Sala criada:', data);
-                document.getElementById('nome-jogador').textContent = data.nome;
-                document.getElementById('codigo-sala').textContent = data.codigo;
-                document.getElementById('config-max-jogadores').textContent = data.config.max_jogadores;
-                document.getElementById('config-num-palavras').textContent = data.config.num_palavras;
-                document.getElementById('modal-sala-criada').classList.remove('hidden');
-
-                // Redirecionar para a sala após um tempo
+                
+                // Armazenar dados da sala
+                window.codigoSalaCriada = data.codigo;
+                window.nomeJogadorCriador = data.nome;
+                window.numPalavrasSala = data.config.num_palavras;
+                
+                // Mostrar mensagem e redirecionar automaticamente
+                mostrarToast("Sala criada! Redirecionando...", "success");
+                
+                // Redirecionar automaticamente para a sala
                 setTimeout(() => {
-                    window.location.href = `/sala/${data.codigo}?jogador=${encodeURIComponent(data.nome)}&num_palavras=${data.config.num_palavras}`;
-                }, 2000);
+                    const codigo = data.codigo;
+                    const nome = data.nome;
+                    const numPalavras = data.config.num_palavras;
+                    window.location.href = `/sala/${codigo}?jogador=${encodeURIComponent(nome)}&num_palavras=${numPalavras}`;
+                }, 1000);
             });
 
             socket.on('erro', function (data) {
@@ -263,11 +260,6 @@
             // Esconder botões iniciais
             document.querySelector(".main-actions").classList.add("hidden");
         }
-        function mostrarAvatares() {
-            document.getElementById("config-section").classList.remove("hidden");
-            document.getElementById("criar-sala-final").classList.remove("hidden");
-        }
-
         function mostrarEntrarSala() {
             const nome = document.getElementById("nome-input").value.trim();
 
@@ -345,21 +337,27 @@
             window.location.href = `/sala/${codigo}?jogador=${encodeURIComponent(nome)}`;
         }
 
-        function copiarCodigo() {
-            const codigo = document.getElementById("codigo-sala").textContent;
-            navigator.clipboard.writeText(codigo).then(() => {
-                mostrarToast("Código copiado!", "success");
-            }).catch(() => {
-                // Fallback para navegadores mais antigos
-                const textArea = document.createElement("textarea");
-                textArea.value = codigo;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                mostrarToast("Código copiado!", "success");
-            });
+        // Gerenciar seletor de avatar
+        let avatarSelecionado = '👤';
+
+        function toggleAvatarMenu() {
+            const dropdown = document.getElementById("avatar-dropdown");
+            dropdown.classList.toggle("hidden");
         }
+
+        function selecionarAvatar(emoji) {
+            avatarSelecionado = emoji;
+            document.getElementById("avatar-current").querySelector('.avatar-emoji').textContent = emoji;
+            document.getElementById("avatar-dropdown").classList.add("hidden");
+        }
+
+        // Fechar dropdown de avatar ao clicar fora
+        document.addEventListener("click", function(e) {
+            const avatarSelector = document.querySelector('.avatar-selector');
+            if (!avatarSelector.contains(e.target)) {
+                document.getElementById("avatar-dropdown").classList.add("hidden");
+            }
+        });
 
         // Atualizar valores dos sliders
         function atualizarSliders() {
@@ -391,13 +389,6 @@
         // Atualizar valores dos sliders
         document.getElementById("max-jogadores").addEventListener("input", atualizarSliders);
         document.getElementById("num-palavras").addEventListener("input", atualizarSliders);
-
-        // Fechar modal ao clicar fora
-        document.getElementById("modal-sala-criada").addEventListener("click", function (e) {
-            if (e.target === this) {
-                this.classList.add("hidden");
-            }
-        });
 
         // Inicializar valores dos sliders
         atualizarSliders();

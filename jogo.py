@@ -3,7 +3,7 @@ from normalizador import NormalizadorTexto
 class Configuracao:
     def __init__(self, num_palavras=5, max_jogadores=8):
         self.num_palavras = max(4, min(8, num_palavras))  # Entre 4 e 8
-        self.max_jogadores = max(2, min(8, max_jogadores))  # Entre 2 e 8
+        self.max_jogadores = max(2, min(10, max_jogadores))  # Entre 2 e 10
 
 class Jogador:
     def __init__(self, nome, num_palavras=5):

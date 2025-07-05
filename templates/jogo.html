@@ -101,6 +101,37 @@
                 <p id="status-sala">Conectando...</p>
                 <!-- Lista de jogadores na sala de espera -->
                 <div id="lista-jogadores-aguardando" class="players-list" style="justify-content: center; margin-top: 1rem; flex-wrap: wrap; gap: 0.5rem;"></div>
+                
+                <!-- Botão para marcar-se como pronto -->
+                <div id="botao-pronto-container" style="margin: 1rem 0;">
+                    <button class="btn btn-success btn-large" onclick="alternarPronto()" id="btn-pronto">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z">
+                            </path>
+                        </svg>
+                        Marcar como Pronto
+                    </button>
+                    <p class="text-muted" style="margin-top: 0.5rem; font-size: 0.9rem;" id="status-pronto-info">
+                        Marque-se como pronto quando estiver preparado para jogar
+                    </p>
+                </div>
+                
+                <!-- Botão para iniciar partida (apenas para o criador) -->
+                <div id="botao-iniciar-container" class="hidden" style="margin: 1.5rem 0;">
+                    <button class="btn btn-primary btn-large" onclick="iniciarPartida()" id="btn-iniciar-partida" disabled>
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                            </path>
+                        </svg>
+                        Iniciar Partida
+                    </button>
+                    <p class="text-muted" style="margin-top: 0.5rem; font-size: 0.9rem;" id="iniciar-partida-info">
+                        Aguardando todos os jogadores ficarem prontos
+                    </p>
+                </div>
+                
                 <div class="room-code">
                     <span class="text-muted">Código da sala:</span>
                     <div class="code-display" id="codigo-atual"></div>
@@ -128,6 +159,11 @@
                     Defina suas <span id="num-palavras-texto">5</span> palavras
                 </h2>
                 <p class="text-muted mb-3">Escolha palavras que seus adversários terão que adivinhar!</p>
+                
+                <!-- Aviso de mínimo de jogadores -->
+                <div class="alert alert-warning" id="aviso-min-jogadores">
+                    Aguardando pelo menos 2 jogadores para iniciar o jogo...
+                </div>
 
                 <div class="words-input-container" id="container-palavras">
                     <!-- Inputs serão gerados dinamicamente -->
@@ -324,10 +360,15 @@
     <!-- Toast -->
     <div id="toast" class="toast"></div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
     <script>
         // Variáveis globais
-        let socket;
+        let meuSid = null;
+        let socket = null;
+        let souCriador = false;
+        let estouPronto = false;
+        let statusJogadores = [];
+        let salaEncontrada = false;
         let meuNome = '';
         let codigoSala = '';
         let numPalavras = 5;
@@ -354,21 +395,38 @@
             document.getElementById('num-palavras-texto').textContent = numPalavras;
 
             inicializarSocket();
-            gerarInputsPalavras();
+            // gerarInputsPalavras() será chamada quando necessário, não aqui
         });
 
         function inicializarSocket() {
             socket = io();
 
             socket.on('connect', function () {
-                console.log('Conectado ao servidor');
+                meuSid = socket.id;
+                console.log('Conectado ao servidor, meuSid:', meuSid);
 
                 // A sala já foi criada na página inicial.
                 // Ao carregar esta página, o objetivo é sempre ENTRAR na sala.
+                console.log(`Tentando entrar na sala: ${codigoSala} com nome: ${meuNome}`);
                 socket.emit('entrar_na_sala', {
                     sala: codigoSala,
                     nome: meuNome
                 });
+                
+                // Gerar inputs após um pequeno delay para garantir que tudo esteja pronto
+                setTimeout(() => {
+                    gerarInputsPalavras();
+                }, 100);
+                
+                // Configurar um timeout caso não receba resposta em 5 segundos
+                setTimeout(function() {
+                    if (!salaEncontrada) {
+                        mostrarToast('Não foi possível conectar à sala. Verifique o código e tente novamente.', 'error');
+                        setTimeout(function() {
+                            window.location.href = '/';
+                        }, 3000);
+                    }
+                }, 5000);
             });
 
             // Listener para emojis recebidos
@@ -404,41 +462,95 @@
             });
 
             // Eventos do jogo
-            socket.on('sala_criada', function (data) {
-                console.log('Sala criada:', data);
-                document.getElementById('status-sala').textContent = `Sala criada! Aguardando jogadores... (1/${data.config.max_jogadores})`;
-                document.getElementById('config-info').textContent = `${data.config.num_palavras} palavras • Máx. ${data.config.max_jogadores} jogadores`;
-                // Mostra o criador na lista de espera
-                atualizarListaJogadoresAguardando([meuNome]);
+            socket.on('sala_criada', function(data) {
+                console.log('[DEBUG] Sala criada:', data);
+                souCriador = true;
+                salaEncontrada = true;
+                mostrarSecao('secao-aguardando');
+                atualizarBotaoIniciarPartida(1, data.max_jogadores || 10);
             });
 
-            socket.on('jogador_entrou', function (data) {
-                console.log('Jogador entrou:', data);
-                document.getElementById('status-sala').textContent = `${data.total}/${data.max} jogadores conectados`;
-                atualizarListaJogadoresAguardando(data.jogadores);
+            socket.on('jogador_entrou', function(data) {
+                console.log('[DEBUG] Jogador entrou:', data);
+                salaEncontrada = true; // Marcar que encontrou a sala
+                
+                // Se recebeu flag sou_criador, atualizar
+                if ('sou_criador' in data) {
+                    souCriador = data.sou_criador;
+                    console.log(`[DEBUG] Status de criador atualizado via jogador_entrou: ${souCriador}`);
+                }
+                
+                // Atualizar informações da sala
+                totalJogadores = data.total;
+                maxJogadores = data.max;
+                
+                // Atualizar lista com informações de status pronto
+                if (data.jogadores_info) {
+                    statusJogadores = data.jogadores_info;
+                    atualizarListaJogadoresComStatus(data.jogadores_info);
+                } else {
+                    atualizarListaJogadoresAguardando(data.jogadores);
+                }
+                
+                // Atualizar interface baseada no tipo de usuário
+                atualizarBotoesBaseadoNoTipo(statusJogadores || []);
+                
+                atualizarBotaoIniciarPartida(data.total, data.max, data.todos_prontos);
+                
+                // Atualizar informações da configuração
+                const configInfo = document.getElementById('config-info');
+                if (configInfo) {
+                    configInfo.textContent = `${data.total}/${data.max} jogadores`;
+                }
+            });
+
+            // Novo evento para atualização de status de prontos
+            socket.on('status_prontos_atualizado', function(data) {
+                console.log('[DEBUG] Status prontos atualizado:', data);
+                statusJogadores = data.jogadores;
+                atualizarListaJogadoresComStatus(data.jogadores);
+                atualizarBotaoIniciarPartida(data.total_jogadores, 10, data.todos_prontos);
+                
+                // Atualizar info de status
+                const prontos = data.jogadores_prontos;
+                const total = data.total_jogadores;
+                document.getElementById('status-pronto-info').textContent = 
+                    `${prontos}/${total} jogadores prontos`;
             });
 
             socket.on('pode_comecar', function (data) {
                 console.log('Pode começar:', data);
                 document.getElementById('status-sala').textContent = data.msg;
-                atualizarListaJogadoresAguardando(data.jogadores);
+                atualizarListaJogadoresAguardando(data.jogadores || []);
+
+                // Ocultar botões de iniciar partida e pronto quando a partida começa
+                document.getElementById('botao-iniciar-container').classList.add('hidden');
+                document.getElementById('botao-pronto-container').classList.add('hidden');
 
                 // Atualizar configuração para todos os jogadores
-                if (data.config) {
-                    numPalavras = data.config.num_palavras;
+                if (data.num_palavras) {
+                    numPalavras = data.num_palavras;
                     document.getElementById('num-palavras-texto').textContent = numPalavras;
                     gerarInputsPalavras(); // Regenerar com o número correto
                 }
 
-                setTimeout(() => {
-                    mostrarSecao('secao-palavras');
-                }, 1000);
+                // Mostrar seção de palavras
+                mostrarSecao('secao-palavras');
             });
 
             socket.on('status_palavras_atualizado', function (data) {
                 console.log('Status palavras atualizado:', data);
                 mostrarToast(data.msg, 'info');
-                atualizarStatusPalavras(data.status_jogadores);
+                
+                // Verificar se há jogadores pendentes
+                if (data.jogadores_pendentes && data.jogadores_pendentes.length > 0) {
+                    const mensagem = `Aguardando palavras de: ${data.jogadores_pendentes.join(', ')}`;
+                    document.getElementById('status-sala').textContent = mensagem;
+                }
+                
+                if (data.status_jogadores) {
+                    atualizarStatusPalavras(data.status_jogadores);
+                }
             });
 
             socket.on('palavras_recebidas', function (data) {
@@ -453,9 +565,23 @@
                 mostrarToast(data.msg, 'success');
                 estadoJogo = data.estado;
                 const criadorSid = estadoJogo.criador;
-                const meuSid = socket.id;
+                // meuSid já está definido globalmente
                 mostrarSecao('secao-jogo');
                 atualizarInterfaceJogo();
+            });
+
+            socket.on('jogador_saiu', function (data) {
+                console.log('Jogador saiu:', data);
+                mostrarToast(data.msg, 'info');
+                
+                // Atualizar lista de jogadores
+                if (data.jogadores_restantes) {
+                    atualizarListaJogadoresAguardando(data.jogadores_restantes);
+                    // Atualizar botão de iniciar partida se estamos na sala de espera
+                    if (!estadoJogo) {
+                        atualizarBotaoIniciarPartida(data.jogadores_restantes.length, 10); // Assumindo máximo de 10
+                    }
+                }
             });
 
             socket.on('resposta_tentativa', function (data) {
@@ -537,40 +663,91 @@
             socket.on('erro', function (data) {
                 console.error('Erro:', data);
                 mostrarToast(data.msg, 'error');
+                
+                // Se for erro de sala não encontrada, redirecionar após um tempo
+                if (data.msg && data.msg.includes('Sala não encontrada')) {
+                    setTimeout(function() {
+                        mostrarToast('Redirecionando para a página inicial...', 'info');
+                        setTimeout(function() {
+                            window.location.href = '/';
+                        }, 2000);
+                    }, 3000);
+                }
+            });
+
+            socket.on('error', function (data) {
+                console.error('Error:', data);
+                mostrarToast(data.msg, 'error');
+                
+                // Reabilitar botão de iniciar partida se houve erro
+                const botao = document.getElementById('btn-iniciar-partida');
+                if (botao && data.msg && data.msg.includes('pronto')) {
+                    botao.disabled = true;
+                    botao.innerHTML = `
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                            </path>
+                        </svg>
+                        ⏳ Aguardando Jogadores
+                    `;
+                }
+            });
+            
+            // Ouvir mensagens de aviso (não são erros, mas informações importantes)
+            socket.on('aviso', function (data) {
+                console.log('Aviso:', data);
+                mostrarToast(data.msg, 'warning');
+                
+                // Se o aviso contém informação sobre o criador ter saído, atualizar a interface
+                if (data.msg && data.msg.includes('criador da sala')) {
+                    document.getElementById('status-sala').textContent += ' (Criador saiu)';
+                }
+            });
+
+            // Novo evento para processar status do usuário
+            socket.on('meu_status', function(data) {
+                console.log('[DEBUG] Meu status recebido:', data);
+                
+                // Atualizar variáveis globais
+                souCriador = data.sou_criador;
+                meuNome = data.nome;
+                codigoSala = data.sala;
+                
+                console.log(`[DEBUG] Configurado: souCriador=${souCriador}, nome=${meuNome}`);
+                
+                // Atualizar interface baseada no status
+                if (statusJogadores && statusJogadores.length > 0) {
+                    atualizarBotoesBaseadoNoTipo(statusJogadores);
+                }
             });
         }
 
         function gerarInputsPalavras() {
-            const container = document.getElementById('container-palavras');
-            container.innerHTML = '';
-
-            for (let i = 1; i <= numPalavras; i++) {
-                const div = document.createElement('div');
-                div.className = 'input-group';
-                div.innerHTML = `
-                    <label for="palavra-${i}">Palavra ${i}:</label>
-                    <input type="text" id="palavra-${i}" placeholder="Digite a palavra ${i}" maxlength="30" autocomplete="off">
-                `;
-                // Se eu sou o criador e este não é meu próprio nome...
-                if (meuSid === criadorSid && jogador.nome !== /* seu nome */ meuNome) {
-                    const btn = document.createElement('button');
-                    btn.className = 'btn btn-sm btn-danger ml-2';
-                    btn.textContent = '🛑';
-                    // você pode usar jogador.sid se já tiver enviado do servidor,
-                    // ou simplesmente usar jogador.nome e adaptar o back-end para mapear
-                    btn.onclick = () => expulsarJogador(jogador.nome);
-                    playerDiv.appendChild(btn);
-                }
-
-                container.appendChild(div);
+            if (!numPalavras || numPalavras <= 0) {
+                console.log('NumPalavras não definido ainda');
+                return;
             }
-
-            // Adicionar event listener para Enter
-            container.addEventListener('keypress', function (e) {
-                if (e.key === 'Enter') {
-                    enviarPalavras();
-                }
-            });
+            
+            const container = document.getElementById('container-palavras');
+            if (!container) {
+                console.log('Container de palavras não encontrado!');
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            for (let i = 1; i <= numPalavras; i++) {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.id = `palavra-${i}`;
+                input.placeholder = `Palavra ${i}`;
+                input.maxLength = 20;
+                input.required = true;
+                input.className = 'form-input';
+                
+                container.appendChild(input);
+            }
         }
 
         function enviarPalavras() {
@@ -648,51 +825,54 @@
             const indicador = document.getElementById('indicador-turno');
             const textoTurno = document.getElementById('texto-turno');
             const minhaVez = document.getElementById('minha-vez');
-            const naoMinhaVez = document.getElementById('nao-minha-vez');
 
             if (estadoJogo.jogador_da_vez === meuNome) {
                 indicador.className = 'turn-indicator my-turn';
                 textoTurno.textContent = 'Sua vez de jogar!';
-                minhaVez.classList.remove('hidden');
-                naoMinhaVez.classList.add('hidden');
+                if (minhaVez) minhaVez.classList.remove('hidden');
             } else {
                 indicador.className = 'turn-indicator opponent-turn';
                 textoTurno.textContent = `Vez de ${estadoJogo.jogador_da_vez}`;
-                minhaVez.classList.add('hidden');
-                naoMinhaVez.classList.remove('hidden');
-                document.getElementById('jogador-da-vez').textContent = estadoJogo.jogador_da_vez;
+                if (minhaVez) minhaVez.classList.add('hidden');
             }
 
             // Encontrar meus dados e do meu alvo
             const meusDados = estadoJogo.jogadores.find(j => j.nome === meuNome);
             if (meusDados) {
-                document.getElementById('meu-alvo').textContent = meusDados.alvo;
-                document.getElementById('dica-atual').textContent = meusDados.dica_atual || '---';
-                document.getElementById('progresso-palavra').textContent =
-                    `Palavra ${meusDados.palavra_atual_index + 1} de ${estadoJogo.config.num_palavras}`;
+                const meuAlvoElem = document.getElementById('meu-alvo');
+                const dicaAtualElem = document.getElementById('dica-atual');
+                const progressoPalavraElem = document.getElementById('progresso-palavra');
+                
+                if (meuAlvoElem) meuAlvoElem.textContent = meusDados.alvo;
+                if (dicaAtualElem) dicaAtualElem.textContent = meusDados.dica_atual || '---';
+                if (progressoPalavraElem) {
+                    progressoPalavraElem.textContent = `Palavra ${meusDados.palavra_atual_index + 1} de ${estadoJogo.config.num_palavras}`;
+                }
 
                 // Atualizar palavra de referência
                 const palavraReferencia = document.getElementById('palavra-referencia');
                 const valorReferencia = document.getElementById('valor-referencia');
 
-                if (meusDados.palavra_anterior && meusDados.palavra_anterior.trim()) {
-                    palavraReferencia.style.display = 'block';
-                    valorReferencia.textContent = meusDados.palavra_anterior;
-                } else {
-                    palavraReferencia.style.display = 'none';
+                if (palavraReferencia && valorReferencia) {
+                    if (meusDados.palavra_anterior && meusDados.palavra_anterior.trim()) {
+                        palavraReferencia.style.display = 'block';
+                        valorReferencia.textContent = meusDados.palavra_anterior;
+                    } else {
+                        palavraReferencia.style.display = 'none';
+                    }
                 }
-
-                // Atualizar grid das palavras do alvo
-                atualizarGridPalavras('palavras-alvo-grid', meusDados, false);
             }
 
-            // Atualizar minhas palavras
+            // Atualizar minhas palavras (como alvo)
             const meuAlvo = estadoJogo.jogadores.find(j => j.nome === meusDados?.alvo);
             if (meuAlvo) {
                 atualizarGridPalavras('minhas-palavras-grid', meuAlvo, true);
             }
 
-            // Atualizar lista de jogadores
+            // Atualizar todos os jogadores
+            atualizarTodosJogadores();
+
+            // Atualizar lista de jogadores no header
             const jogadores = estadoJogo.jogadores.map(j => j.nome);
             atualizarListaJogadores(jogadores);
         }
@@ -752,13 +932,36 @@
             const container = document.getElementById('lista-jogadores-aguardando');
             if (!container) return;
             container.innerHTML = '';
+            
+            // Atualizar também o header
+            const headerContainer = document.getElementById('lista-jogadores-header');
+            if (headerContainer) headerContainer.innerHTML = '';
+            
             jogadores.forEach(nome => {
+                // Para o container principal de espera
                 const chip = document.createElement('div');
                 chip.className = 'player-chip';
                 // Adiciona um ícone para cada jogador na lista de espera
                 chip.innerHTML = `👤 ${nome}`;
                 container.appendChild(chip);
+                
+                // Também atualizar o header se não for meu nome
+                if (nome !== meuNome && headerContainer) {
+                    const headerChip = document.createElement('span');
+                    headerChip.className = 'player-opponent';
+                    headerChip.textContent = nome;
+                    headerContainer.appendChild(headerChip);
+                }
             });
+            
+            // Mostrar quantos jogadores estão na sala
+            if (jogadores.length >= 2) {
+                document.getElementById('status-sala').innerHTML = 
+                    `<span class="ready-status">✅ ${jogadores.length} jogadores conectados - Prontos para jogar!</span>`;
+            } else {
+                document.getElementById('status-sala').textContent = 
+                    `Aguardando mais jogadores (mínimo: 2)`;
+            }
         }
 
         function adicionarHistorico(jogador, palavra, acertou, mensagem) {
@@ -853,6 +1056,166 @@
                     nome: meuNome
                 });
                 window.location.href = '/';
+            }
+        }
+
+        function iniciarPartida() {
+            if (confirm('Tem certeza que deseja iniciar a partida? Todos os jogadores atuais serão transferidos para definir suas palavras.')) {
+                // Desabilitar botão temporariamente
+                const botao = document.getElementById('btn-iniciar-partida');
+                botao.disabled = true;
+                botao.textContent = 'Iniciando partida...';
+                
+                socket.emit('iniciar_partida_manual', {
+                    sala: codigoSala,
+                    nome: meuNome
+                });
+            }
+        }
+
+        function alternarPronto() {
+            // Verificar se é criador
+            if (souCriador) {
+                mostrarToast('O criador da sala não precisa marcar-se como pronto', 'warning');
+                return;
+            }
+            
+            estouPronto = !estouPronto;
+            
+            const botao = document.getElementById('btn-pronto');
+            if (estouPronto) {
+                botao.classList.remove('btn-success');
+                botao.classList.add('btn-warning');
+                botao.innerHTML = `
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
+                    Cancelar Pronto
+                `;
+            } else {
+                botao.classList.remove('btn-warning');
+                botao.classList.add('btn-success');
+                botao.innerHTML = `
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
+                    Marcar como Pronto
+                `;
+            }
+            
+            // Enviar status para o servidor
+            socket.emit('marcar_pronto', {
+                sala: codigoSala,
+                nome: meuNome,
+                pronto: estouPronto
+            });
+        }
+
+        function atualizarListaJogadoresComStatus(jogadores) {
+            const container = document.getElementById('lista-jogadores-aguardando');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            // Atualizar também o header
+            const headerContainer = document.getElementById('lista-jogadores-header');
+            if (headerContainer) headerContainer.innerHTML = '';
+            
+            // Identificar se eu sou o criador
+            const euSouCriador = jogadores.find(j => j.nome === meuNome && j.criador);
+            if (euSouCriador) {
+                souCriador = true;
+            }
+            
+            jogadores.forEach(jogador => {
+                // Para o container principal de espera
+                const chip = document.createElement('div');
+                
+                if (jogador.criador) {
+                    // Criador: sem status de pronto
+                    chip.className = 'player-chip criador';
+                    chip.innerHTML = `👑 ${jogador.nome} (Criador)`;
+                } else {
+                    // Jogador normal: com status de pronto
+                    chip.className = `player-chip ${jogador.pronto ? 'ready' : 'not-ready'}`;
+                    const statusIcon = jogador.pronto ? '✅' : '⏳';
+                    chip.innerHTML = `${statusIcon} ${jogador.nome}`;
+                }
+                
+                container.appendChild(chip);
+                
+                // Também atualizar o header se não for meu nome
+                if (jogador.nome !== meuNome && headerContainer) {
+                    const headerChip = document.createElement('span');
+                    headerChip.className = 'player-opponent';
+                    headerChip.textContent = jogador.nome;
+                    headerContainer.appendChild(headerChip);
+                }
+            });
+            
+            // Atualizar botões baseado no tipo de usuário
+            atualizarBotoesBaseadoNoTipo(jogadores);
+        }
+
+        function atualizarBotaoIniciarPartida(totalJogadores, jogadoresProntos, todosProntos = false) {
+            console.log(`[DEBUG] atualizarBotaoIniciarPartida: total=${totalJogadores}, prontos=${jogadoresProntos}, todosProntos=${todosProntos}`);
+            
+            const botao = document.getElementById('btn-iniciar-partida');
+            const info = document.getElementById('iniciar-partida-info');
+            
+            if (!botao || !info) {
+                console.log('[DEBUG] Elementos do botão não encontrados no DOM');
+                return;
+            }
+            
+            if (totalJogadores === 0) {
+                // Só tem o criador na sala
+                botao.disabled = true;
+                botao.style.backgroundColor = '#ccc';
+                botao.style.opacity = '0.6';
+                botao.innerHTML = `
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
+                    Aguardando Jogadores
+                `;
+                info.textContent = 'Aguarde outros jogadores entrarem na sala';
+                info.style.color = '#666';
+            } else if (todosProntos) {
+                // Todos os jogadores estão prontos
+                botao.disabled = false;
+                botao.style.backgroundColor = '#4CAF50';
+                botao.style.opacity = '1';
+                botao.innerHTML = `
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
+                    🚀 Iniciar Partida
+                `;
+                info.textContent = `Todos os ${totalJogadores} jogadores estão prontos!`;
+                info.style.color = '#4CAF50';
+            } else {
+                // Nem todos estão prontos
+                botao.disabled = true;
+                botao.style.backgroundColor = '#ccc';
+                botao.style.opacity = '0.6';
+                botao.innerHTML = `
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
+                    ⏳ Aguardando Jogadores (${jogadoresProntos}/${totalJogadores})
+                `;
+                info.textContent = `Aguardando ${totalJogadores - jogadoresProntos} jogador(es) ficarem prontos`;
+                info.style.color = '#666';
             }
         }
 
@@ -986,32 +1349,39 @@
 
             if (estadoJogo.jogador_da_vez === meuNome) {
                 // É minha vez - mostrar controles normais
-                minhaVez.classList.remove('hidden');
-                espelhoJogador.classList.add('hidden');
-                tituloAdivinhacao.textContent = 'Sua Vez de Adivinhar';
+                if (minhaVez) minhaVez.classList.remove('hidden');
+                if (espelhoJogador) espelhoJogador.classList.add('hidden');
+                if (tituloAdivinhacao) tituloAdivinhacao.textContent = 'Sua Vez de Adivinhar';
             } else {
                 // Não é minha vez - mostrar espelho
-                minhaVez.classList.add('hidden');
-                espelhoJogador.classList.remove('hidden');
-                tituloAdivinhacao.textContent = 'Observando o Jogo';
+                if (minhaVez) minhaVez.classList.add('hidden');
+                if (espelhoJogador) espelhoJogador.classList.remove('hidden');
+                if (tituloAdivinhacao) tituloAdivinhacao.textContent = 'Observando o Jogo';
 
                 // Encontrar dados do jogador ativo
                 const jogadorAtivo = estadoJogo.jogadores.find(j => j.nome === estadoJogo.jogador_da_vez);
                 if (jogadorAtivo) {
-                    document.getElementById('mirror-player-name').textContent = jogadorAtivo.nome;
-                    document.getElementById('mirror-dica-atual').textContent = jogadorAtivo.dica_atual || '---';
-                    document.getElementById('mirror-progresso-palavra').textContent =
-                        `Palavra ${jogadorAtivo.palavra_atual_index + 1} de ${estadoJogo.config.num_palavras}`;
+                    const mirrorPlayerName = document.getElementById('mirror-player-name');
+                    const mirrorDicaAtual = document.getElementById('mirror-dica-atual');
+                    const mirrorProgressoPalavra = document.getElementById('mirror-progresso-palavra');
+                    
+                    if (mirrorPlayerName) mirrorPlayerName.textContent = jogadorAtivo.nome;
+                    if (mirrorDicaAtual) mirrorDicaAtual.textContent = jogadorAtivo.dica_atual || '---';
+                    if (mirrorProgressoPalavra) {
+                        mirrorProgressoPalavra.textContent = `Palavra ${jogadorAtivo.palavra_atual_index + 1} de ${estadoJogo.config.num_palavras}`;
+                    }
 
                     // Palavra de referência no espelho
                     const mirrorPalavraReferencia = document.getElementById('mirror-palavra-referencia');
                     const mirrorValorReferencia = document.getElementById('mirror-valor-referencia');
 
-                    if (jogadorAtivo.palavra_anterior && jogadorAtivo.palavra_anterior.trim()) {
-                        mirrorPalavraReferencia.style.display = 'block';
-                        mirrorValorReferencia.textContent = jogadorAtivo.palavra_anterior;
-                    } else {
-                        mirrorPalavraReferencia.style.display = 'none';
+                    if (mirrorPalavraReferencia && mirrorValorReferencia) {
+                        if (jogadorAtivo.palavra_anterior && jogadorAtivo.palavra_anterior.trim()) {
+                            mirrorPalavraReferencia.style.display = 'block';
+                            mirrorValorReferencia.textContent = jogadorAtivo.palavra_anterior;
+                        } else {
+                            mirrorPalavraReferencia.style.display = 'none';
+                        }
                     }
                 }
             }
@@ -1100,92 +1470,53 @@
             });
         }
 
-
-        // Atualizar função atualizarInterfaceJogo
-        function atualizarInterfaceJogo() {
-            if (!estadoJogo) return;
-
-            // Atualizar indicador de turno
-            const indicador = document.getElementById('indicador-turno');
-            const textoTurno = document.getElementById('texto-turno');
-
-            if (estadoJogo.jogador_da_vez === meuNome) {
-                indicador.className = 'turn-indicator my-turn';
-                textoTurno.textContent = 'Sua vez de jogar!';
-            } else {
-                indicador.className = 'turn-indicator opponent-turn';
-                textoTurno.textContent = `Vez de ${estadoJogo.jogador_da_vez}`;
-            }
-
-            // Atualizar espelho do jogador
-            atualizarEspelhoJogador();
-
-            // Encontrar meus dados e do meu alvo
-            const meusDados = estadoJogo.jogadores.find(j => j.nome === meuNome);
-            if (meusDados) {
-                document.getElementById('meu-alvo').textContent = meusDados.alvo;
-                document.getElementById('dica-atual').textContent = meusDados.dica_atual || '---';
-                document.getElementById('progresso-palavra').textContent =
-                    `Palavra ${meusDados.palavra_atual_index + 1} de ${estadoJogo.config.num_palavras}`;
-
-                // Atualizar palavra de referência
-                const palavraReferencia = document.getElementById('palavra-referencia');
-                const valorReferencia = document.getElementById('valor-referencia');
-
-                if (meusDados.palavra_anterior && meusDados.palavra_anterior.trim()) {
-                    palavraReferencia.style.display = 'block';
-                    valorReferencia.textContent = meusDados.palavra_anterior;
+        function atualizarBotoesBaseadoNoTipo(jogadores) {
+            const botaoProntoContainer = document.getElementById('botao-pronto-container');
+            const botaoIniciarContainer = document.getElementById('botao-iniciar-container');
+            
+            const euSouCriador = jogadores.find(j => j.nome === meuNome && j.criador);
+            
+            if (euSouCriador) {
+                // Sou criador: mostrar apenas botão de iniciar partida
+                if (botaoProntoContainer) botaoProntoContainer.classList.add('hidden');
+                if (botaoIniciarContainer) botaoIniciarContainer.classList.remove('hidden');
+                
+                // Calcular status dos jogadores (exceto criador)
+                const jogadoresNaoCriadores = jogadores.filter(j => !j.criador);
+                const jogadoresProntos = jogadoresNaoCriadores.filter(j => j.pronto);
+                const todosProntos = jogadoresNaoCriadores.length > 0 && jogadoresProntos.length === jogadoresNaoCriadores.length;
+                
+                atualizarBotaoIniciarPartida(jogadoresNaoCriadores.length, jogadoresProntos.length, todosProntos);
+                
+                // Atualizar status da sala
+                if (jogadoresNaoCriadores.length === 0) {
+                    document.getElementById('status-sala').innerHTML = 
+                        `<span class="waiting-status">Aguardando outros jogadores entrarem na sala</span>`;
+                } else if (todosProntos) {
+                    document.getElementById('status-sala').innerHTML = 
+                        `<span class="ready-status">🎉 Todos os ${jogadoresNaoCriadores.length} jogadores estão prontos!</span>`;
                 } else {
-                    palavraReferencia.style.display = 'none';
+                    document.getElementById('status-sala').innerHTML = 
+                        `<span class="waiting-status">⏳ ${jogadoresProntos.length}/${jogadoresNaoCriadores.length} jogadores prontos</span>`;
+                }
+                
+            } else {
+                // Sou jogador normal: mostrar apenas botão de marcar pronto
+                if (botaoIniciarContainer) botaoIniciarContainer.classList.add('hidden');
+                if (botaoProntoContainer) botaoProntoContainer.classList.remove('hidden');
+                
+                // Mostrar status geral
+                const jogadoresNaoCriadores = jogadores.filter(j => !j.criador);
+                const jogadoresProntos = jogadoresNaoCriadores.filter(j => j.pronto);
+                
+                if (jogadoresNaoCriadores.length >= 2 && jogadoresProntos.length === jogadoresNaoCriadores.length) {
+                    document.getElementById('status-sala').innerHTML = 
+                        `<span class="ready-status">🎉 Todos os jogadores estão prontos! Aguardando o criador iniciar.</span>`;
+                } else {
+                    document.getElementById('status-sala').innerHTML = 
+                        `<span class="waiting-status">⏳ ${jogadoresProntos.length}/${jogadoresNaoCriadores.length} jogadores prontos</span>`;
                 }
             }
-
-            // Atualizar minhas palavras (como alvo)
-            const meuAlvo = estadoJogo.jogadores.find(j => j.nome === meusDados?.alvo);
-            if (meuAlvo) {
-                atualizarGridPalavras('minhas-palavras-grid', meuAlvo, true);
-            }
-
-            // Atualizar todos os jogadores
-            atualizarTodosJogadores();
-
-            // Atualizar lista de jogadores no header
-            const jogadores = estadoJogo.jogadores.map(j => j.nome);
-            atualizarListaJogadores(jogadores);
-        }
-
-        // Função para atualizar status das palavras
-        function atualizarStatusPalavras(statusJogadores) {
-            // Adicionar indicador visual na seção de palavras
-            let statusHtml = '<div class="status-palavras" style="margin-top: 1rem; padding: 1rem; background: var(--surface-hover); border-radius: var(--radius); border: 1px solid var(--border);">';
-            statusHtml += '<h4 style="margin-bottom: 0.75rem; color: var(--text-primary);">📝 Status dos Jogadores:</h4>';
-            statusHtml += '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">';
-
-            statusJogadores.forEach(jogador => {
-                const icone = jogador.palavras_definidas ? '✅' : '⏳';
-                const status = jogador.palavras_definidas ? 'Pronto' : 'Escrevendo...';
-                const cor = jogador.palavras_definidas ? 'var(--success-color)' : 'var(--warning-color)';
-
-                statusHtml += `
-                    <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--surface-elevated); border-radius: var(--radius); border: 1px solid var(--border);">
-                        <span style="font-size: 1.2rem;">👤</span>
-                        <span style="font-weight: 500; color: var(--text-primary);">${jogador.nome}</span>
-                        <span style="color: ${cor}; font-size: 0.8rem; font-weight: 600;">${icone} ${status}</span>
-                    </div>
-                `;
-            });
-
-            statusHtml += '</div></div>';
-
-            // Remover status anterior se existir
-            const statusAnterior = document.querySelector('.status-palavras');
-            if (statusAnterior) {
-                statusAnterior.remove();
-            }
-
-            // Adicionar novo status
-            const containerPalavras = document.getElementById('secao-palavras').querySelector('.card');
-            containerPalavras.insertAdjacentHTML('beforeend', statusHtml);
         }
 
         // Event listeners para inputs
