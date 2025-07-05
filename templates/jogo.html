@@ -399,15 +399,23 @@
         });
 
         function inicializarSocket() {
-            socket = io();
+            // Configuração mais robusta do socket para produção
+            socket = io({
+                transports: ['websocket', 'polling'],
+                timeout: 20000,
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 5,
+                maxReconnectionAttempts: 10
+            });
 
             socket.on('connect', function () {
                 meuSid = socket.id;
-                console.log('Conectado ao servidor, meuSid:', meuSid);
+                console.log('[SOCKET] Conectado ao servidor, meuSid:', meuSid);
 
                 // A sala já foi criada na página inicial.
                 // Ao carregar esta página, o objetivo é sempre ENTRAR na sala.
-                console.log(`Tentando entrar na sala: ${codigoSala} com nome: ${meuNome}`);
+                console.log(`[DEBUG] Tentando entrar na sala: ${codigoSala} com nome: ${meuNome}`);
                 socket.emit('entrar_na_sala', {
                     sala: codigoSala,
                     nome: meuNome
@@ -418,7 +426,7 @@
                     gerarInputsPalavras();
                 }, 100);
                 
-                // Configurar um timeout caso não receba resposta em 5 segundos
+                // Configurar um timeout caso não receba resposta em 10 segundos (aumentado)
                 setTimeout(function() {
                     if (!salaEncontrada) {
                         mostrarToast('Não foi possível conectar à sala. Verifique o código e tente novamente.', 'error');
@@ -426,39 +434,44 @@
                             window.location.href = '/';
                         }, 3000);
                     }
-                }, 5000);
+                }, 10000);
+            });
+
+            socket.on('disconnect', function (reason) {
+                console.log('[SOCKET] Desconectado:', reason);
+                mostrarToast('Conexão perdida. Tentando reconectar...', 'warning');
+                
+                if (reason === 'io server disconnect') {
+                    // O servidor forçou a desconexão, reconectar manualmente
+                    socket.connect();
+                }
+            });
+
+            socket.on('connect_error', function (error) {
+                console.error('[SOCKET] Erro de conexão:', error);
+                mostrarToast('Problemas de conexão com o servidor...', 'warning');
+            });
+
+            socket.on('reconnect', function (attemptNumber) {
+                console.log('[SOCKET] Reconectado após', attemptNumber, 'tentativas');
+                mostrarToast('Reconectado ao servidor!', 'success');
+                
+                // Reentrar na sala após reconexão
+                socket.emit('entrar_na_sala', {
+                    sala: codigoSala,
+                    nome: meuNome
+                });
+            });
+
+            socket.on('reconnecting', function (attemptNumber) {
+                console.log('[SOCKET] Tentando reconectar...', attemptNumber);
+                mostrarToast(`Reconectando (${attemptNumber})...`, 'info');
             });
 
             // Listener para emojis recebidos
             socket.on('emoji_recebido', function (data) {
                 console.log('Emoji recebido:', data);
                 criarEmojiFlutante(data.emoji, data.nome);
-            });
-
-            socket.on('disconnect', function () {
-                console.log('Desconectado do servidor');
-                mostrarToast('Conexão perdida. Tentando reconectar automaticamente...', 'warning');
-                
-                // Tentativas de reconexão com backoff exponencial
-                let tentativas = 0;
-                const tentarReconectar = function() {
-                    if (!socket.connected && tentativas < 10) {
-                        setTimeout(function() {
-                            tentativas++;
-                            mostrarToast(`Tentando reconectar (${tentativas}/10)...`, 'warning');
-                            socket.connect();
-                            
-                            if (!socket.connected) {
-                                // Aumentar tempo entre tentativas (backoff exponencial)
-                                tentarReconectar();
-                            }
-                        }, Math.min(1000 * Math.pow(1.5, tentativas), 10000)); // Máximo 10 segundos
-                    } else if (!socket.connected) {
-                        mostrarToast('Falha na reconexão. Atualize a página.', 'error');
-                    }
-                };
-                
-                tentarReconectar();
             });
 
             // Eventos do jogo

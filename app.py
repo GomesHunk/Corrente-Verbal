@@ -3,7 +3,7 @@ import time
 import random
 import string
 import logging
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from jogo import Jogador, PartidaMultiplayer, Configuracao
 from health import register_health_routes
@@ -11,15 +11,17 @@ from health import register_health_routes
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'jogo_das_palavras_secret')
 
-# Configurações otimizadas para servidores com recursos limitados
+# Configurações otimizadas para produção no Render
 socketio = SocketIO(
     app, 
     cors_allowed_origins="*",
-    ping_timeout=60,    # Reduzido para economizar recursos
-    ping_interval=25,
-    logger=False,
-    engineio_logger=False,
-    async_mode='threading'  # Usar threading para melhor performance em servidores pequenos
+    ping_timeout=120,        # Aumentado para conexões lentas
+    ping_interval=60,        # Aumentado para estabilidade
+    logger=True,             # Ativar logs para debug
+    engineio_logger=True,    # Ativar logs do engine
+    async_mode='threading',
+    allow_upgrades=False,    # Forçar WebSocket direto
+    transports=['websocket', 'polling']  # Permitir fallback
 )
 
 # Configurar logging
@@ -273,31 +275,40 @@ def on_disconnect():
 @socketio.on('criar_sala')
 def criar_sala(data):
     try:
+        logger.info(f'=== INÍCIO CRIAR_SALA ===')
+        logger.info(f'Data recebida: {data}')
+        logger.info(f'Request SID: {request.sid}')
+        
         nome = data.get('nome', '').strip()
         num_palavras = int(data.get('num_palavras', 5))
         # Tornar max_jogadores opcional - usar 10 como padrão (máximo)
         max_jogadores = int(data.get('max_jogadores', 10)) 
 
+        logger.info(f'Parâmetros processados: nome={nome}, palavras={num_palavras}, max={max_jogadores}')
+
         # Validações básicas
         if not nome:
+            logger.warning('Nome vazio - rejeitando criação')
             emit('erro', {'msg': 'Nome é obrigatório'})
             return
         if len(nome) > 20:
+            logger.warning(f'Nome muito longo ({len(nome)} chars) - rejeitando')
             emit('erro', {'msg': 'Nome deve ter no máximo 20 caracteres'})
             return
 
-        # Gera código único de 6 dígitos
+        # Gera código único com mais tentativas
         codigo = None
-        # Tentar até 10 vezes para gerar um código único
-        for _ in range(10):
+        for tentativa in range(20):  # Aumentado de 10 para 20
             codigo_tentativa = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
             if codigo_tentativa not in salas:
                 codigo = codigo_tentativa
+                logger.info(f'Código gerado na tentativa {tentativa + 1}: {codigo}')
                 break
                 
         # Se não conseguir gerar um código único, gerar um mais longo
         if not codigo:
             codigo = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+            logger.warning(f'Usando código longo devido a colisões: {codigo}')
             
         logger.info(f'Criando sala com código: {codigo} por {nome} ({request.sid})')
 
@@ -324,11 +335,14 @@ def criar_sala(data):
             'criada_em': tempo_atual      # timestamp de criação da sala
         }
 
+        logger.info(f'Sala {codigo} salva no dicionário. Total de salas: {len(salas)}')
+
         # Entra na sala (Socket.IO room)
         join_room(codigo)
+        logger.info(f'Jogador {nome} entrou na room {codigo}')
 
-        # Emite confirmação de criação, incluindo players e criador
-        emit('sala_criada', {
+        # Preparar resposta
+        resposta = {
             'codigo': codigo,
             'nome': nome,
             'config': {
@@ -337,16 +351,24 @@ def criar_sala(data):
             },
             'players': salas[codigo]['players'],
             'criador': salas[codigo]['criador']
-        })
+        }
+
+        logger.info(f'Enviando resposta sala_criada: {resposta}')
+
+        # Emite confirmação de criação, incluindo players e criador
+        emit('sala_criada', resposta)
         
         # Logar detalhes da sala criada para debug
         debug_salas()
 
-        logger.info(f'Sala {codigo} criada com sucesso por {nome} ({request.sid}) '
-                    f'- {num_palavras} palavras, máximo de {max_jogadores} jogadores')
+        logger.info(f'=== SUCESSO CRIAR_SALA: {codigo} ===')
 
     except Exception as e:
-        logger.error(f'Erro ao criar sala: {str(e)}')
+        logger.error(f'=== ERRO CRIAR_SALA ===')
+        logger.error(f'Erro: {str(e)}')
+        logger.error(f'Tipo: {type(e)}')
+        import traceback
+        logger.error(f'Traceback: {traceback.format_exc()}')
         emit('erro', {'msg': 'Erro interno do servidor'})
 
 @socketio.on('entrar_na_sala')
