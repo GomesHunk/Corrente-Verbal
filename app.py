@@ -11,18 +11,35 @@ from health import register_health_routes
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'jogo_das_palavras_secret')
 
-# Configurações otimizadas para produção no Render
-socketio = SocketIO(
-    app, 
-    cors_allowed_origins="*",
-    ping_timeout=120,        # Aumentado para conexões lentas
-    ping_interval=60,        # Aumentado para estabilidade
-    logger=True,             # Ativar logs para debug
-    engineio_logger=True,    # Ativar logs do engine
-    async_mode='threading',
-    allow_upgrades=False,    # Forçar WebSocket direto
-    transports=['websocket', 'polling']  # Permitir fallback
-)
+# Detectar se está em produção (Render)
+IS_PRODUCTION = os.environ.get('RENDER') is not None
+
+# Configurações condicionais para SocketIO
+if IS_PRODUCTION:
+    # Configurações otimizadas para produção (Render)
+    socketio = SocketIO(
+        app, 
+        cors_allowed_origins="*",
+        ping_timeout=60,         # Reduzido para evitar timeouts
+        ping_interval=25,        # Reduzido para manter conexão ativa
+        logger=False,            # Desativar em produção para reduzir logs
+        engineio_logger=False,   # Desativar em produção
+        async_mode='threading',
+        transports=['polling', 'websocket'],  # Polling primeiro para estabilidade
+        allow_upgrades=True      # Permitir upgrade para websocket
+    )
+else:
+    # Configurações para desenvolvimento local
+    socketio = SocketIO(
+        app, 
+        cors_allowed_origins="*",
+        ping_timeout=120,
+        ping_interval=60,
+        logger=True,
+        engineio_logger=True,
+        async_mode='threading',
+        transports=['websocket', 'polling']
+    )
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)

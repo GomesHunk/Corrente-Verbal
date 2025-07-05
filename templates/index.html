@@ -197,21 +197,27 @@
         let socket;
 
         // Inicializar Socket.IO com configurações robustas
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 3;
+
         document.addEventListener('DOMContentLoaded', function () {
-            // Configuração mais robusta do socket para produção
+            // Configuração mais conservadora para produção
             socket = io({
-                transports: ['websocket', 'polling'],
-                timeout: 20000,
+                transports: ['polling', 'websocket'],
+                upgrade: true,
+                timeout: 30000,          // 30 segundos
                 reconnection: true,
-                reconnectionDelay: 1000,
-                reconnectionAttempts: 5,
-                maxReconnectionAttempts: 10
+                reconnectionDelay: 2000, // 2 segundos entre tentativas
+                reconnectionAttempts: 3, // Apenas 3 tentativas
+                maxReconnectionAttempts: 3,
+                forceNew: false
             });
 
             // Adicionar logs detalhados
             socket.on('connect', function () {
                 console.log('[SOCKET] Conectado ao servidor');
                 console.log('[SOCKET] Socket ID:', socket.id);
+                reconnectAttempts = 0; // Reset contador
             });
 
             socket.on('disconnect', function (reason) {
@@ -224,17 +230,29 @@
 
             socket.on('connect_error', function (error) {
                 console.error('[SOCKET] Erro de conexão:', error);
-                mostrarToast('Problemas de conexão com o servidor...', 'warning');
+                reconnectAttempts++;
+                
+                if (reconnectAttempts >= maxReconnectAttempts) {
+                    console.log('[SOCKET] Máximo de tentativas atingido, parando reconexão');
+                    socket.disconnect();
+                    mostrarToast('Erro de conexão. Recarregue a página.', 'error');
+                    return;
+                }
+                
+                mostrarToast(`Problemas de conexão... (${reconnectAttempts}/${maxReconnectAttempts})`, 'warning');
             });
 
             socket.on('reconnect', function (attemptNumber) {
                 console.log('[SOCKET] Reconectado após', attemptNumber, 'tentativas');
                 mostrarToast('Reconectado ao servidor!', 'success');
+                reconnectAttempts = 0;
             });
 
             socket.on('reconnecting', function (attemptNumber) {
                 console.log('[SOCKET] Tentando reconectar...', attemptNumber);
-                mostrarToast('Tentando reconectar...', 'info');
+                if (attemptNumber <= maxReconnectAttempts) {
+                    mostrarToast(`Reconectando (${attemptNumber}/${maxReconnectAttempts})...`, 'info');
+                }
             });
 
             socket.on('sala_criada', function (data) {
@@ -337,7 +355,13 @@
             
             if (!socket.connected) {
                 mostrarToast('Conectando ao servidor...', 'info');
-                setTimeout(criarSala, 2000); // Tentar novamente em 2s
+                // Tentar reconectar se necessário
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    socket.connect();
+                    setTimeout(criarSala, 3000); // Tentar novamente em 3s
+                } else {
+                    mostrarToast('Erro de conexão. Recarregue a página.', 'error');
+                }
                 return;
             }
             

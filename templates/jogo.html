@@ -399,19 +399,25 @@
         });
 
         function inicializarSocket() {
-            // Configuração mais robusta do socket para produção
+            // Configuração mais conservadora para produção
+            let reconnectAttempts = 0;
+            const maxReconnectAttempts = 3;
+            
             socket = io({
-                transports: ['websocket', 'polling'],
-                timeout: 20000,
+                transports: ['polling', 'websocket'],
+                upgrade: true,
+                timeout: 30000,          // 30 segundos
                 reconnection: true,
-                reconnectionDelay: 1000,
-                reconnectionAttempts: 5,
-                maxReconnectionAttempts: 10
+                reconnectionDelay: 2000, // 2 segundos entre tentativas
+                reconnectionAttempts: 3, // Apenas 3 tentativas
+                maxReconnectionAttempts: 3,
+                forceNew: false
             });
 
             socket.on('connect', function () {
                 meuSid = socket.id;
                 console.log('[SOCKET] Conectado ao servidor, meuSid:', meuSid);
+                reconnectAttempts = 0; // Reset contador
 
                 // A sala já foi criada na página inicial.
                 // Ao carregar esta página, o objetivo é sempre ENTRAR na sala.
@@ -426,7 +432,7 @@
                     gerarInputsPalavras();
                 }, 100);
                 
-                // Configurar um timeout caso não receba resposta em 10 segundos (aumentado)
+                // Configurar um timeout caso não receba resposta em 15 segundos
                 setTimeout(function() {
                     if (!salaEncontrada) {
                         mostrarToast('Não foi possível conectar à sala. Verifique o código e tente novamente.', 'error');
@@ -434,7 +440,7 @@
                             window.location.href = '/';
                         }, 3000);
                     }
-                }, 10000);
+                }, 15000);
             });
 
             socket.on('disconnect', function (reason) {
@@ -449,12 +455,22 @@
 
             socket.on('connect_error', function (error) {
                 console.error('[SOCKET] Erro de conexão:', error);
-                mostrarToast('Problemas de conexão com o servidor...', 'warning');
+                reconnectAttempts++;
+                
+                if (reconnectAttempts >= maxReconnectAttempts) {
+                    console.log('[SOCKET] Máximo de tentativas atingido, parando reconexão');
+                    socket.disconnect();
+                    mostrarToast('Erro de conexão. Recarregue a página.', 'error');
+                    return;
+                }
+                
+                mostrarToast(`Problemas de conexão... (${reconnectAttempts}/${maxReconnectAttempts})`, 'warning');
             });
 
             socket.on('reconnect', function (attemptNumber) {
                 console.log('[SOCKET] Reconectado após', attemptNumber, 'tentativas');
                 mostrarToast('Reconectado ao servidor!', 'success');
+                reconnectAttempts = 0;
                 
                 // Reentrar na sala após reconexão
                 socket.emit('entrar_na_sala', {
@@ -465,7 +481,9 @@
 
             socket.on('reconnecting', function (attemptNumber) {
                 console.log('[SOCKET] Tentando reconectar...', attemptNumber);
-                mostrarToast(`Reconectando (${attemptNumber})...`, 'info');
+                if (attemptNumber <= maxReconnectAttempts) {
+                    mostrarToast(`Reconectando (${attemptNumber}/${maxReconnectAttempts})...`, 'info');
+                }
             });
 
             // Listener para emojis recebidos
