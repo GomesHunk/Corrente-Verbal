@@ -4,6 +4,7 @@ Health check endpoint para monitoramento do Render
 from flask import jsonify
 import psutil
 import os
+import time
 
 def get_health_status():
     """Retorna o status de saúde da aplicação"""
@@ -12,18 +13,20 @@ def get_health_status():
         memory = psutil.virtual_memory()
         memory_percent = memory.percent
         
-        # Verificar uso de CPU
-        cpu_percent = psutil.cpu_percent(interval=1)
+        # Verificar uso de CPU com amostragem rápida (não bloqueante)
+        cpu_percent = psutil.cpu_percent(interval=0.1)
         
-        # Verificar se o processo está rodando há muito tempo
+        # Uptime do processo
         process = psutil.Process(os.getpid())
-        uptime = process.create_time()
+        start_time = process.create_time()
+        uptime_seconds = max(0, time.time() - start_time)
         
         status = {
             "status": "healthy",
             "memory_usage": f"{memory_percent:.1f}%",
             "cpu_usage": f"{cpu_percent:.1f}%",
-            "uptime": uptime,
+            "uptime_seconds": int(uptime_seconds),
+            "started_at": start_time,
             "pid": os.getpid()
         }
         
@@ -39,6 +42,7 @@ def get_health_status():
             "status": "error",
             "error": str(e)
         }
+
 
 def register_health_routes(app):
     """Registra as rotas de health check"""

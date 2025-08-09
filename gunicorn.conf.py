@@ -4,7 +4,8 @@ import multiprocessing
 # Configurações otimizadas para Render - evitar loops de reconexão
 bind = f"0.0.0.0:{os.environ.get('PORT', 5000)}"
 workers = 1  # Manter 1 worker para o plano gratuito
-worker_class = "gevent"  # Voltar para gevent por estabilidade
+# Habilita WebSocket nativo com gevent-websocket
+worker_class = "geventwebsocket.gunicorn.workers.GeventWebSocketWorker"
 worker_connections = 1000
 timeout = 120  # Timeout conservador
 keepalive = 2   # Keepalive mais baixo
@@ -24,10 +25,7 @@ errorlog = "-"
 
 # Configurações para produção - reduzir timeouts
 graceful_timeout = 20  # Reduzido
-worker_tmp_dir = "/dev/shm"
-accesslog = "-"
-errorlog = "-"
-access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"'
+backlog = 2048
 
 # Configurações de processo
 daemon = False
@@ -36,9 +34,6 @@ user = None
 group = None
 umask = 0
 
-# Configurações SSL (não necessário para Render)
+# SSL (não usado no Render)
 keyfile = None
 certfile = None
-
-# Configurações de rede
-backlog = 2048

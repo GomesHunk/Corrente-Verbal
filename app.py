@@ -16,29 +16,25 @@ IS_PRODUCTION = os.environ.get('RENDER') is not None
 
 # Configurações condicionais para SocketIO
 if IS_PRODUCTION:
-    # Configurações otimizadas para produção (Render)
+    # Usa gevent no Render (compatível com gunicorn worker gevent)
     socketio = SocketIO(
-        app, 
+        app,
         cors_allowed_origins="*",
-        ping_timeout=60,         # Reduzido para evitar timeouts
-        ping_interval=25,        # Reduzido para manter conexão ativa
-        logger=False,            # Desativar em produção para reduzir logs
-        engineio_logger=False,   # Desativar em produção
-        async_mode='threading',
-        transports=['polling', 'websocket'],  # Polling primeiro para estabilidade
-        allow_upgrades=True      # Permitir upgrade para websocket
+        ping_timeout=60,
+        ping_interval=25,
+        logger=False,
+        engineio_logger=False,
+        async_mode='gevent'
     )
 else:
-    # Configurações para desenvolvimento local
     socketio = SocketIO(
-        app, 
+        app,
         cors_allowed_origins="*",
         ping_timeout=120,
         ping_interval=60,
         logger=True,
         engineio_logger=True,
-        async_mode='threading',
-        transports=['websocket', 'polling']
+        async_mode='threading'
     )
 
 # Configurar logging
@@ -94,7 +90,8 @@ def verificar_iniciar_jogo(codigo):
         logger.warning(f'Tentativa de verificar iniciar jogo em sala inexistente: {codigo}')
         return False
     
-    partida = salas[codigo]['partida']
+    sala = salas[codigo]
+    partida = sala['partida']
     
     # Verificar se temos pelo menos 2 jogadores
     if len(partida.jogadores) < 2:
@@ -127,6 +124,8 @@ def verificar_iniciar_jogo(codigo):
         partida.iniciar_jogo()
         
         estado = partida.get_estado_jogo()
+        # Incluir info do criador no estado
+        estado['criador'] = sala.get('criador')
         emit('jogo_iniciado', {
             'msg': 'Todos definiram as palavras! O jogo começou!',
             'estado': estado
@@ -682,6 +681,7 @@ def tentar_adivinhar(data):
         
         # Obter estado atualizado
         estado = partida.get_estado_jogo()
+        estado['criador'] = salas[sala].get('criador')
 
         # Emitir resultado para todos na sala
         emit('resposta_tentativa', {
@@ -975,6 +975,61 @@ def marcar_pronto(data):
     except Exception as e:
         logger.error(f'Erro ao marcar pronto: {e}', exc_info=True)
         emit('error', {'msg': 'Erro interno do servidor'})
+
+@socketio.on('sair_da_sala')
+def sair_da_sala(data):
+    """Permite a um jogador sair explicitamente da sala"""
+    try:
+        codigo = (data or {}).get('sala', '').strip().upper()
+        nome = (data or {}).get('nome', '').strip()
+        if not codigo or codigo not in salas:
+            emit('erro', {'msg': 'Sala não encontrada'})
+            return
+        sala = salas[codigo]
+        partida = sala['partida']
+
+        # Remover do mapa de sockets
+        if request.sid in sala['players']:
+            del sala['players'][request.sid]
+
+        # Remover jogador da partida pelo nome
+        nomes_antes = [j.nome for j in partida.jogadores]
+        partida.jogadores = [j for j in partida.jogadores if j.nome.lower() != nome.lower()]
+        nomes_depois = [j.nome for j in partida.jogadores]
+
+        # Se o criador saiu, remarcar a sala para remoção ou promover outro
+        if request.sid == sala.get('criador'):
+            if partida.jogadores:
+                # Promover primeiro jogador restante
+                for sid, n in sala.get('players', {}).items():
+                    if n.lower() == partida.jogadores[0].nome.lower():
+                        sala['criador'] = sid
+                        break
+            else:
+                # Sem jogadores, marcar remoção rápida
+                sala['marcada_para_remocao'] = time.time() + 60
+
+        leave_room(codigo)
+
+        # Notificar demais
+        emit('jogador_saiu', {
+            'jogador': nome or 'Um jogador',
+            'msg': f'{nome or "Um jogador"} saiu da sala',
+            'jogadores_restantes': [j.nome for j in partida.jogadores]
+        }, room=codigo)
+
+        # Se jogo em andamento e >=2, reconfigurar alvos
+        if len(partida.jogadores) >= 2:
+            try:
+                partida._configurar_alvos()
+                estado = partida.get_estado_jogo()
+                emit('estado_atualizado', {'estado': estado}, room=codigo)
+            except Exception:
+                pass
+
+    except Exception as e:
+        logger.error(f'Erro em sair_da_sala: {e}', exc_info=True)
+        emit('erro', {'msg': 'Erro interno do servidor'})
 
 def debug_salas():
     """Função auxiliar para debug do estado das salas"""

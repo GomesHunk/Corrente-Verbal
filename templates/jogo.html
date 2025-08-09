@@ -9,10 +9,16 @@
     <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
     <script>
-        // Aplicar tema IMEDIATAMENTE quando o body é carregado
+        // Aplicar tema IMEDIATAMENTE no <html> (sem sobrescrever outras classes)
         (function () {
             const temaSalvo = localStorage.getItem('tema') || 'theme-dark';
-            document.documentElement.className = `game-body ${temaSalvo}`;
+            const root = document.documentElement;
+            root.className = root.className
+                .split(' ')
+                .filter(c => !c.startsWith('theme-'))
+                .join(' ')
+                .trim();
+            root.classList.add(temaSalvo);
         })();
     </script>
 </head>
@@ -373,6 +379,8 @@
         let codigoSala = '';
         let numPalavras = 5;
         let estadoJogo = null;
+        let totalJogadores = 0;   // adicionado
+        let maxJogadores = 0;     // adicionado
 
         // Inicialização
         document.addEventListener('DOMContentLoaded', function () {
@@ -494,41 +502,34 @@
 
             // Eventos do jogo
             socket.on('sala_criada', function(data) {
-                console.log('[DEBUG] Sala criada:', data);
+                // Criador em página da sala (fallback), ajustar estados
                 souCriador = true;
                 salaEncontrada = true;
                 mostrarSecao('secao-aguardando');
-                atualizarBotaoIniciarPartida(1, data.max_jogadores || 10);
+                statusJogadores = data.jogadores_info || [];
+                const naoCriadores = (statusJogadores || []).filter(j => !j.criador);
+                const prontos = naoCriadores.filter(j => j.pronto).length;
+                atualizarBotaoIniciarPartida(naoCriadores.length, prontos, prontos === naoCriadores.length && naoCriadores.length > 0);
             });
 
             socket.on('jogador_entrou', function(data) {
-                console.log('[DEBUG] Jogador entrou:', data);
-                salaEncontrada = true; // Marcar que encontrou a sala
-                
-                // Se recebeu flag sou_criador, atualizar
+                salaEncontrada = true;
                 if ('sou_criador' in data) {
                     souCriador = data.sou_criador;
-                    console.log(`[DEBUG] Status de criador atualizado via jogador_entrou: ${souCriador}`);
                 }
-                
-                // Atualizar informações da sala
                 totalJogadores = data.total;
                 maxJogadores = data.max;
-                
-                // Atualizar lista com informações de status pronto
                 if (data.jogadores_info) {
                     statusJogadores = data.jogadores_info;
                     atualizarListaJogadoresComStatus(data.jogadores_info);
+                    const naoCriadores = data.jogadores_info.filter(j => !j.criador);
+                    const prontos = naoCriadores.filter(j => j.pronto).length;
+                    atualizarBotaoIniciarPartida(naoCriadores.length, prontos, data.todos_prontos === true);
                 } else {
                     atualizarListaJogadoresAguardando(data.jogadores);
+                    const naoCriadores = (data.jogadores || []).filter(n => n !== meuNome);
+                    atualizarBotaoIniciarPartida(naoCriadores.length, 0, false);
                 }
-                
-                // Atualizar interface baseada no tipo de usuário
-                atualizarBotoesBaseadoNoTipo(statusJogadores || []);
-                
-                atualizarBotaoIniciarPartida(data.total, data.max, data.todos_prontos);
-                
-                // Atualizar informações da configuração
                 const configInfo = document.getElementById('config-info');
                 if (configInfo) {
                     configInfo.textContent = `${data.total}/${data.max} jogadores`;
@@ -540,13 +541,13 @@
                 console.log('[DEBUG] Status prontos atualizado:', data);
                 statusJogadores = data.jogadores;
                 atualizarListaJogadoresComStatus(data.jogadores);
-                atualizarBotaoIniciarPartida(data.total_jogadores, 10, data.todos_prontos);
-                
-                // Atualizar info de status
-                const prontos = data.jogadores_prontos;
+                const naoCriadores = data.jogadores.filter(j => !j.criador);
+                const prontos = naoCriadores.filter(j => j.pronto).length;
+                atualizarBotaoIniciarPartida(naoCriadores.length, prontos, data.todos_prontos === true);
+                const prontosCount = data.jogadores_prontos;
                 const total = data.total_jogadores;
-                document.getElementById('status-pronto-info').textContent = 
-                    `${prontos}/${total} jogadores prontos`;
+                const info = document.getElementById('status-pronto-info');
+                if (info) info.textContent = `${prontosCount}/${total} jogadores prontos`;
             });
 
             socket.on('pode_comecar', function (data) {
@@ -751,6 +752,12 @@
                 if (statusJogadores && statusJogadores.length > 0) {
                     atualizarBotoesBaseadoNoTipo(statusJogadores);
                 }
+            });
+
+            socket.on('estado_atualizado', function(data) {
+                console.log('[DEBUG] Estado atualizado recebido');
+                estadoJogo = data.estado;
+                atualizarInterfaceJogo();
             });
         }
 
@@ -997,36 +1004,42 @@
 
         function adicionarHistorico(jogador, palavra, acertou, mensagem) {
             const lista = document.getElementById('lista-historico');
-
-            // Remover mensagem "nenhuma tentativa"
             const noHistory = lista.querySelector('.no-history');
-            if (noHistory) {
-                noHistory.remove();
-            }
+            if (noHistory) noHistory.remove();
 
             const div = document.createElement('div');
             div.className = `history-item ${acertou ? 'success' : 'error'}`;
 
             const agora = new Date();
-            const timestamp = agora.toLocaleTimeString('pt-BR', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            const timestamp = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-            div.innerHTML = `
-                <div class="history-header">
-                    <span class="history-player">${jogador}</span>
-                    <span class="history-time">${timestamp}</span>
-                </div>
-                <div class="history-content">
-                    <div class="history-word">Tentativa: "${palavra}"</div>
-                    <div class="history-result ${acertou ? 'success' : 'error'}">${mensagem}</div>
-                </div>
-            `;
+            const header = document.createElement('div');
+            header.className = 'history-header';
+            const spanPlayer = document.createElement('span');
+            spanPlayer.className = 'history-player';
+            spanPlayer.textContent = jogador;
+            const spanTime = document.createElement('span');
+            spanTime.className = 'history-time';
+            spanTime.textContent = timestamp;
+            header.appendChild(spanPlayer);
+            header.appendChild(spanTime);
+
+            const content = document.createElement('div');
+            content.className = 'history-content';
+            const word = document.createElement('div');
+            word.className = 'history-word';
+            word.textContent = `Tentativa: "${palavra}"`;
+            const result = document.createElement('div');
+            result.className = `history-result ${acertou ? 'success' : 'error'}`;
+            result.textContent = mensagem;
+
+            content.appendChild(word);
+            content.appendChild(result);
+
+            div.appendChild(header);
+            div.appendChild(content);
 
             lista.insertBefore(div, lista.firstChild);
-
-            // Limitar histórico a 20 itens
             while (lista.children.length > 20) {
                 lista.removeChild(lista.lastChild);
             }
@@ -1034,17 +1047,24 @@
 
         function adicionarMensagemChat(jogador, mensagem, timestamp) {
             const container = document.getElementById('mensagens-chat');
-
             const div = document.createElement('div');
             div.className = `chat-message ${jogador === meuNome ? 'own' : 'other'}`;
 
-            div.innerHTML = `
-                <div class="message-header">
-                    <span>${jogador}</span>
-                    <span>${timestamp}</span>
-                </div>
-                <div class="message-bubble">${mensagem}</div>
-            `;
+            const header = document.createElement('div');
+            header.className = 'message-header';
+            const spanNome = document.createElement('span');
+            spanNome.textContent = jogador;
+            const spanTime = document.createElement('span');
+            spanTime.textContent = timestamp;
+            header.appendChild(spanNome);
+            header.appendChild(spanTime);
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.textContent = mensagem; // usa textContent para evitar XSS
+
+            div.appendChild(header);
+            div.appendChild(bubble);
 
             container.appendChild(div);
             container.scrollTop = container.scrollHeight;
@@ -1191,37 +1211,48 @@
             atualizarBotoesBaseadoNoTipo(jogadores);
         }
 
-        function atualizarBotaoIniciarPartida(totalJogadores, jogadoresProntos, todosProntos = false) {
-            console.log(`[DEBUG] atualizarBotaoIniciarPartida: total=${totalJogadores}, prontos=${jogadoresProntos}, todosProntos=${todosProntos}`);
-            
+        function atualizarBotaoIniciarPartida(totalNaoCriadores, jogadoresProntos, todosProntos = false) {
             const botao = document.getElementById('btn-iniciar-partida');
             const info = document.getElementById('iniciar-partida-info');
-            
-            if (!botao || !info) {
-                console.log('[DEBUG] Elementos do botão não encontrados no DOM');
+            if (!botao || !info) return;
+
+            // Recalcular se parâmetros inválidos
+            if (jogadoresProntos > totalNaoCriadores || totalNaoCriadores < 0) {
+                const naoCriadores = (statusJogadores || []).filter(j => !j.criador);
+                const prontosCalc = naoCriadores.filter(j => j.pronto).length;
+                totalNaoCriadores = naoCriadores.length;
+                jogadoresProntos = prontosCalc;
+                todosProntos = totalNaoCriadores > 0 && jogadoresProntos === totalNaoCriadores;
+            }
+
+            if (!souCriador) {
+                // Jogador normal: nunca habilita o botão
+                document.getElementById('botao-iniciar-container').classList.add('hidden');
+                document.getElementById('botao-pronto-container').classList.remove('hidden');
                 return;
             }
-            
-            if (totalJogadores === 0) {
-                // Só tem o criador na sala
+
+            // Sou criador: mostrar botão iniciar
+            document.getElementById('botao-pronto-container').classList.add('hidden');
+            document.getElementById('botao-iniciar-container').classList.remove('hidden');
+
+            if (totalNaoCriadores === 0) {
                 botao.disabled = true;
-                botao.style.backgroundColor = '#ccc';
-                botao.style.opacity = '0.6';
+                botao.classList.add('disabled');
                 botao.innerHTML = `
                     <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
-                        </path>
+                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     Aguardando Jogadores
                 `;
                 info.textContent = 'Aguarde outros jogadores entrarem na sala';
-                info.style.color = '#666';
-            } else if (todosProntos) {
-                // Todos os jogadores estão prontos
+                return;
+            }
+
+            if (todosProntos) {
                 botao.disabled = false;
-                botao.style.backgroundColor = '#4CAF50';
-                botao.style.opacity = '1';
+                botao.classList.remove('disabled');
                 botao.innerHTML = `
                     <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -1230,345 +1261,34 @@
                     </svg>
                     🚀 Iniciar Partida
                 `;
-                info.textContent = `Todos os ${totalJogadores} jogadores estão prontos!`;
-                info.style.color = '#4CAF50';
+                info.textContent = `Todos os ${totalNaoCriadores} jogadores estão prontos!`;
             } else {
-                // Nem todos estão prontos
                 botao.disabled = true;
-                botao.style.backgroundColor = '#ccc';
-                botao.style.opacity = '0.6';
+                botao.classList.add('disabled');
                 botao.innerHTML = `
                     <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
                         </path>
                     </svg>
-                    ⏳ Aguardando Jogadores (${jogadoresProntos}/${totalJogadores})
+                    ⏳ Aguardando Jogadores (${jogadoresProntos}/${totalNaoCriadores})
                 `;
-                info.textContent = `Aguardando ${totalJogadores - jogadoresProntos} jogador(es) ficarem prontos`;
-                info.style.color = '#666';
+                info.textContent = `Aguardando ${totalNaoCriadores - jogadoresProntos} jogador(es) ficarem prontos`;
             }
         }
 
-        function voltarInicio() {
-            window.location.href = '/';
-        }
-
-        function exibirGabarito(gabarito) {
-            let gabaritoHtml = '<div class="gabarito-completo">';
-            gabaritoHtml += '<h3>📝 Gabarito Completo</h3>';
-
-            for (const [jogador, dados] of Object.entries(gabarito)) {
-                gabaritoHtml += `
-                    <div class="player-answers">
-                        <h4>Palavras de ${jogador}:</h4>
-                        <ol class="answer-list">
-                `;
-
-                for (let i = 0; i < dados.palavras_originais.length; i++) {
-                    const palavraOriginal = dados.palavras_originais[i];
-                    const palavraNormalizada = dados.palavras_normalizadas[i];
-                    const descoberta = dados.descobertas[i];
-
-                    let statusIcon = descoberta ? '✅' : '❌';
-                    let correcaoInfo = '';
-
-                    // Mostrar se houve correção automática
-                    if (palavraOriginal.toLowerCase() !== palavraNormalizada.toLowerCase()) {
-                        correcaoInfo = ` <span class="correction-info">(corrigido de "${palavraOriginal}")</span>`;
-                    }
-
-                    gabaritoHtml += `
-                        <li class="answer-item ${descoberta ? 'discovered' : 'not-discovered'}">
-                            ${statusIcon} <strong>${palavraNormalizada}</strong>${correcaoInfo}
-                        </li>
-                    `;
-                }
-
-                gabaritoHtml += '</ol></div>';
-            }
-
-            gabaritoHtml += '</div>';
-
-            // Atualizar modal com gabarito e botões
-            document.getElementById('mensagem-fim-jogo').innerHTML = `
-                <div class="winner-announcement">🎉 ${estadoJogo?.vencedor || 'Alguém'} venceu!</div>
-                ${gabaritoHtml}
-            `;
-
-            // Atualizar botões do modal
-            document.querySelector('.modal-footer').innerHTML = `
-                <button class="btn btn-success" onclick="novoJogo()">
-                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                    </svg>
-                    🎮 Novo Jogo
-                </button>
-                <button class="btn btn-primary" onclick="voltarInicio()">
-                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
-                    </svg>
-                    🏠 Início
-                </button>
-                <button class="btn btn-secondary" onclick="fecharModalFim()">
-                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                    </svg>
-                    💬 Chat
-                </button>
-            `;
-        }
-
-        function novoJogo() {
-            if (confirm('Tem certeza que deseja iniciar um novo jogo? Todos os jogadores terão que definir novas palavras.')) {
-                socket.emit('novo_jogo', {
-                    sala: codigoSala,
-                    nome: meuNome
-                });
-            }
-        }
-
-        function fecharModalFim() {
-            document.getElementById('modal-fim-jogo').classList.add('hidden');
-        }
-
-        // Sistema de Emojis Flutuantes
-        function enviarEmoji(emoji) {
-            // Enviar emoji via socket - NÃO criar localmente, deixar o servidor retornar
-            socket.emit('enviar_emoji', {
-                sala: codigoSala,
-                nome: meuNome,
-                emoji: emoji
-            });
-        }
-
-        function criarEmojiFlutante(emoji, jogador) {
-            const container = document.querySelector('.game-container');
-            const emojiElement = document.createElement('div');
-            emojiElement.className = 'floating-emoji';
-            emojiElement.innerHTML = `
-                <div class="emoji-content">
-                    <span class="emoji-icon">${emoji}</span>
-                </div>
-            `;
-
-            // Posição aleatória horizontal
-            emojiElement.style.left = Math.random() * 80 + 10 + "%";
-            emojiElement.style.bottom = "0px";
-
-            container.appendChild(emojiElement);
-
-            // Inicia a animação (forçando reflow)
-            setTimeout(() => {
-                emojiElement.style.bottom = "100vh";
-                emojiElement.style.opacity = "0";
-            }, 10);
-
-            // Remove depois da animação
-            setTimeout(() => {
-                container.removeChild(emojiElement);
-            }, 3000);
-        }
-
-        // Atualizar espelho do jogador ativo
-        function atualizarEspelhoJogador() {
-            if (!estadoJogo) return;
-
-            const minhaVez = document.getElementById('minha-vez');
-            const espelhoJogador = document.getElementById('espelho-jogador');
-            const tituloAdivinhacao = document.getElementById('texto-titulo-adivinhacao');
-
-            if (estadoJogo.jogador_da_vez === meuNome) {
-                // É minha vez - mostrar controles normais
-                if (minhaVez) minhaVez.classList.remove('hidden');
-                if (espelhoJogador) espelhoJogador.classList.add('hidden');
-                if (tituloAdivinhacao) tituloAdivinhacao.textContent = 'Sua Vez de Adivinhar';
-            } else {
-                // Não é minha vez - mostrar espelho
-                if (minhaVez) minhaVez.classList.add('hidden');
-                if (espelhoJogador) espelhoJogador.classList.remove('hidden');
-                if (tituloAdivinhacao) tituloAdivinhacao.textContent = 'Observando o Jogo';
-
-                // Encontrar dados do jogador ativo
-                const jogadorAtivo = estadoJogo.jogadores.find(j => j.nome === estadoJogo.jogador_da_vez);
-                if (jogadorAtivo) {
-                    const mirrorPlayerName = document.getElementById('mirror-player-name');
-                    const mirrorDicaAtual = document.getElementById('mirror-dica-atual');
-                    const mirrorProgressoPalavra = document.getElementById('mirror-progresso-palavra');
-                    
-                    if (mirrorPlayerName) mirrorPlayerName.textContent = jogadorAtivo.nome;
-                    if (mirrorDicaAtual) mirrorDicaAtual.textContent = jogadorAtivo.dica_atual || '---';
-                    if (mirrorProgressoPalavra) {
-                        mirrorProgressoPalavra.textContent = `Palavra ${jogadorAtivo.palavra_atual_index + 1} de ${estadoJogo.config.num_palavras}`;
-                    }
-
-                    // Palavra de referência no espelho
-                    const mirrorPalavraReferencia = document.getElementById('mirror-palavra-referencia');
-                    const mirrorValorReferencia = document.getElementById('mirror-valor-referencia');
-
-                    if (mirrorPalavraReferencia && mirrorValorReferencia) {
-                        if (jogadorAtivo.palavra_anterior && jogadorAtivo.palavra_anterior.trim()) {
-                            mirrorPalavraReferencia.style.display = 'block';
-                            mirrorValorReferencia.textContent = jogadorAtivo.palavra_anterior;
-                        } else {
-                            mirrorPalavraReferencia.style.display = 'none';
-                        }
-                    }
-                }
-            }
-        }
-
-        // Atualizar painel de todos os jogadores
-        function atualizarTodosJogadores() {
-            if (!estadoJogo) return;
-
-            const container = document.getElementById('todos-jogadores-container');
-            container.innerHTML = '';
-            
-            // Verificar se sou o criador
-            const sou_criador = estadoJogo.criador === socket.id;
-
-            estadoJogo.jogadores.forEach(jogador => {
-                const playerDiv = document.createElement('div');
-                playerDiv.className = 'player-section';
-
-                // Ícone especial para jogador ativo
-                const icone = jogador.nome === estadoJogo.jogador_da_vez ? '🎮' : '👤';
-                const status = jogador.nome === estadoJogo.jogador_da_vez ? ' (Jogando)' : '';
-
-                // Contar palavras descobertas pelo jogador (palavras do seu alvo)
-                const descobertas = jogador.palavras_descobertas ?
-                    jogador.palavras_descobertas.filter(d => d).length : 0;
-                const total = estadoJogo.config.num_palavras;
-
-                // Encontrar quem é o alvo deste jogador
-                const nomeAlvo = jogador.alvo || '---';
-
-                const headerDiv = document.createElement('div');
-                headerDiv.className = 'player-header';
-                headerDiv.innerHTML = `
-                    <h5>${icone} ${jogador.nome}${status}</h5>
-                    <span class="player-progress">${descobertas}/${total}</span>
-                `;
-                
-                // Se sou o criador e não é meu próprio nome, adicionar botão de expulsar
-                if (sou_criador && jogador.nome !== meuNome) {
-                    const btnExpulsar = document.createElement('button');
-                    btnExpulsar.className = 'btn btn-sm btn-danger';
-                    btnExpulsar.innerHTML = '🛑';
-                    btnExpulsar.title = 'Expulsar jogador';
-                    btnExpulsar.onclick = () => expulsarJogador(jogador.nome);
-                    headerDiv.appendChild(btnExpulsar);
-                }
-                
-                playerDiv.appendChild(headerDiv);
-
-                // Resto do conteúdo do jogador
-                playerDiv.innerHTML += `
-                    <div class="player-target-info">
-                        <span class="target-label">Adivinhando palavras de:</span>
-                        <span class="target-name">${nomeAlvo}</span>
-                    </div>
-                    <div class="player-words-grid" id="player-${jogador.nome.replace(/\s+/g, '_')}-grid">
-                        <!-- Palavras serão geradas -->
-                    </div>
-                `;
-
-                container.appendChild(playerDiv);
-
-                // Gerar grid de palavras para este jogador (palavras do seu alvo)
-                const grid = document.getElementById(`player-${jogador.nome.replace(/\s+/g, '_')}-grid`);
-                for (let i = 0; i < total; i++) {
-                    const wordDiv = document.createElement('div');
-                    wordDiv.className = 'mini-word-card';
-
-                    const descoberta = jogador.palavras_descobertas && jogador.palavras_descobertas[i];
-                    const dica = jogador.dicas && jogador.dicas[i] ? jogador.dicas[i] : '?';
-
-                    if (descoberta) {
-                        wordDiv.classList.add('discovered');
-                    } else {
-                        wordDiv.classList.add('not-discovered');
-                    }
-
-                    wordDiv.innerHTML = `
-                        <div class="mini-word-hint">${dica}</div>
-                        <div class="mini-word-status">${descoberta ? '✓' : ''}</div>
-                    `;
-
-                    grid.appendChild(wordDiv);
-                }
-            });
-        }
-
-        function atualizarBotoesBaseadoNoTipo(jogadores) {
-            const botaoProntoContainer = document.getElementById('botao-pronto-container');
-            const botaoIniciarContainer = document.getElementById('botao-iniciar-container');
-            
-            const euSouCriador = jogadores.find(j => j.nome === meuNome && j.criador);
-            
-            if (euSouCriador) {
-                // Sou criador: mostrar apenas botão de iniciar partida
-                if (botaoProntoContainer) botaoProntoContainer.classList.add('hidden');
-                if (botaoIniciarContainer) botaoIniciarContainer.classList.remove('hidden');
-                
-                // Calcular status dos jogadores (exceto criador)
-                const jogadoresNaoCriadores = jogadores.filter(j => !j.criador);
-                const jogadoresProntos = jogadoresNaoCriadores.filter(j => j.pronto);
-                const todosProntos = jogadoresNaoCriadores.length > 0 && jogadoresProntos.length === jogadoresNaoCriadores.length;
-                
-                atualizarBotaoIniciarPartida(jogadoresNaoCriadores.length, jogadoresProntos.length, todosProntos);
-                
-                // Atualizar status da sala
-                if (jogadoresNaoCriadores.length === 0) {
-                    document.getElementById('status-sala').innerHTML = 
-                        `<span class="waiting-status">Aguardando outros jogadores entrarem na sala</span>`;
-                } else if (todosProntos) {
-                    document.getElementById('status-sala').innerHTML = 
-                        `<span class="ready-status">🎉 Todos os ${jogadoresNaoCriadores.length} jogadores estão prontos!</span>`;
-                } else {
-                    document.getElementById('status-sala').innerHTML = 
-                        `<span class="waiting-status">⏳ ${jogadoresProntos.length}/${jogadoresNaoCriadores.length} jogadores prontos</span>`;
-                }
-                
-            } else {
-                // Sou jogador normal: mostrar apenas botão de marcar pronto
-                if (botaoIniciarContainer) botaoIniciarContainer.classList.add('hidden');
-                if (botaoProntoContainer) botaoProntoContainer.classList.remove('hidden');
-                
-                // Mostrar status geral
-                const jogadoresNaoCriadores = jogadores.filter(j => !j.criador);
-                const jogadoresProntos = jogadoresNaoCriadores.filter(j => j.pronto);
-                
-                if (jogadoresNaoCriadores.length >= 2 && jogadoresProntos.length === jogadoresNaoCriadores.length) {
-                    document.getElementById('status-sala').innerHTML = 
-                        `<span class="ready-status">🎉 Todos os jogadores estão prontos! Aguardando o criador iniciar.</span>`;
-                } else {
-                    document.getElementById('status-sala').innerHTML = 
-                        `<span class="waiting-status">⏳ ${jogadoresProntos.length}/${jogadoresNaoCriadores.length} jogadores prontos</span>`;
-                }
-            }
-        }
-
-        // Event listeners para inputs
-        document.addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                const activeElement = document.activeElement;
-
-                if (activeElement.id === 'input-tentativa') {
-                    tentarAdivinhar();
-                } else if (activeElement.id === 'input-chat') {
-                    enviarMensagem();
-                }
-            }
-        });
-
-        // Função para alterar tema
+        // Função de tema unificada
         function alterarTema(tema) {
-            document.body.className = `game-body ${tema}`;
+            const root = document.documentElement;
+            root.className = root.className
+                .split(' ')
+                .filter(c => !c.startsWith('theme-'))
+                .join(' ')
+                .trim();
+            root.classList.add(tema);
             localStorage.setItem('tema', tema);
             mostrarToast(`Tema alterado para: ${tema.replace('theme-', '').charAt(0).toUpperCase() + tema.replace('theme-', '').slice(1)}`, 'success');
-            toggleThemeMenu(); // Fechar menu após seleção
+            toggleThemeMenu();
         }
 
         // Função para toggle do menu de temas

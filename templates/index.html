@@ -190,9 +190,8 @@
 
     <!-- Toast para notificações -->
     <div id="toast" class="toast"></div>
-    <div id="toast" class="toast"></div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
     <script>
         let socket;
 
@@ -334,13 +333,6 @@
 
         }
 
-        // No formulário de criar sala, tornar o número de jogadores opcional
-        const maxJogadoresGroup = document.getElementById("max-jogadores-group");
-        if (maxJogadoresGroup) {
-            maxJogadoresGroup.style.display = "flex";
-            maxJogadoresGroup.style.alignItems = "center";
-        }
-
         function criarSala() {
             const nome = document.getElementById("nome-input").value.trim();
             const numPalavras = parseInt(document.getElementById("num-palavras").value);
@@ -452,17 +444,29 @@
         // Inicializar valores dos sliders
         atualizarSliders();
 
-        // Função para alterar o tema
+        // Função para alterar o tema (aplica no <html> e não sobrescreve outras classes)
         function alterarTema(tema) {
-            document.body.className = tema;
+            const root = document.documentElement;
+            root.className = root.className
+                .split(' ')
+                .filter(c => !c.startsWith('theme-'))
+                .join(' ')
+                .trim();
+            root.classList.add(tema);
             localStorage.setItem('tema', tema);
             mostrarToast(`Tema alterado para: ${tema.replace('theme-', '').charAt(0).toUpperCase() + tema.replace('theme-', '').slice(1)}`, 'success');
         }
 
-        // Aplicar tema salvo imediatamente
+        // Aplicar tema salvo imediatamente no <html>
         (function () {
             const temaSalvo = localStorage.getItem('tema') || 'theme-dark';
-            document.documentElement.className = temaSalvo;
+            const root = document.documentElement;
+            root.className = root.className
+                .split(' ')
+                .filter(c => !c.startsWith('theme-'))
+                .join(' ')
+                .trim();
+            root.classList.add(temaSalvo);
         })();
 
         // Função para abrir/fechar o dropdown de temas
