@@ -108,6 +108,9 @@
                 <p id="status-sala" class="text-slate-300">Conectando...</p>
                 <!-- Lista de jogadores na sala de espera -->
                 <div id="lista-jogadores-aguardando" class="players-list justify-center mt-4 flex flex-wrap gap-2"></div>
+                <div class="mt-3 w-full max-w-xl mx-auto">
+                    <ul id="lista-jogadores" class="divide-y divide-white/10"></ul>
+                </div>
                 
                 <!-- Botão para marcar-se como pronto -->
                 <div id="botao-pronto-container" class="my-4">
@@ -366,6 +369,7 @@
         let totalJogadores = 0;
         let maxJogadores = 0;
         let playerId = null; // para reconexão estável
+        let avatarMap = {}; // nome -> url do avatar
 
         // Inicialização
         document.addEventListener('DOMContentLoaded', function () {
@@ -456,13 +460,11 @@
 
             socket.on('jogador_entrou', function(data) {
                 salaEncontrada = true;
-                if ('sou_criador' in data) {
-                    souCriador = data.sou_criador;
-                }
                 totalJogadores = data.total;
                 maxJogadores = data.max;
                 if (data.jogadores_info) {
                     statusJogadores = data.jogadores_info;
+                    atualizarAvatarMap(data.jogadores_info);
                     atualizarListaJogadoresComStatus(data.jogadores_info);
                     const naoCriadores = data.jogadores_info.filter(j => !j.criador);
                     const prontos = naoCriadores.filter(j => j.pronto).length;
@@ -483,6 +485,7 @@
 
             socket.on('status_prontos_atualizado', function(data) {
                 statusJogadores = data.jogadores;
+                atualizarAvatarMap(data.jogadores);
                 atualizarListaJogadoresComStatus(data.jogadores);
                 const naoCriadores = data.jogadores.filter(j => !j.criador);
                 const prontos = naoCriadores.filter(j => j.pronto).length;
@@ -497,6 +500,7 @@
                 souCriador = data.sou_criador;
                 meuNome = data.nome;
                 codigoSala = data.sala;
+                if (data.avatar) avatarMap[data.nome] = data.avatar;
                 atualizarVisibilidadeSeletorModo();
                 if (statusJogadores && statusJogadores.length > 0) {
                     atualizarBotoesBaseadoNoTipo(statusJogadores);
@@ -581,13 +585,11 @@
 
             socket.on('jogador_entrou', function(data) {
                 salaEncontrada = true;
-                if ('sou_criador' in data) {
-                    souCriador = data.sou_criador;
-                }
                 totalJogadores = data.total;
                 maxJogadores = data.max;
                 if (data.jogadores_info) {
                     statusJogadores = data.jogadores_info;
+                    atualizarAvatarMap(data.jogadores_info);
                     atualizarListaJogadoresComStatus(data.jogadores_info);
                     const naoCriadores = data.jogadores_info.filter(j => !j.criador);
                     const prontos = naoCriadores.filter(j => j.pronto).length;
@@ -831,361 +833,218 @@
             });
         }
 
-        function atualizarBotoesBaseadoNoTipo(jogadores) {
-            const botaoProntoContainer = document.getElementById('botao-pronto-container');
-            const botaoIniciarContainer = document.getElementById('botao-iniciar-container');
-            // Confiar primeiro na flag global souCriador
-            const ehCriador = souCriador || (jogadores || []).some(j => j.nome === meuNome && j.criador);
-            if (ehCriador) {
-                botaoProntoContainer?.classList.add('hidden');
-                botaoIniciarContainer?.classList.remove('hidden');
+        function criarAvatar(url, alt) {
+            const img = document.createElement('img');
+            img.src = url || '/static/avatars/meme-troll.svg';
+            img.alt = alt || 'Avatar';
+            img.referrerPolicy = 'no-referrer';
+            img.className = 'h-8 w-8 rounded-full ring-2 ring-white/20 object-cover bg-slate-800';
+            return img;
+        }
+
+        // Atualiza o mapa de avatares a partir de um array jogadores_info
+        function atualizarAvatarMap(jogadoresInfo = []) {
+            (jogadoresInfo || []).forEach(j => {
+                if (j && j.nome) avatarMap[j.nome] = j.avatar || avatarMap[j.nome] || '/static/avatars/meme-troll.svg';
+            });
+        }
+
+        function mostrarSecao(secaoId) {
+            const secoes = ['secao-aguardando', 'secao-palavras', 'secao-jogo'];
+            secoes.forEach(s => {
+                const secao = document.getElementById(s);
+                if (secao) {
+                    if (s === secaoId) {
+                        secao.classList.remove('hidden');
+                        secao.classList.add('flex');
+                    } else {
+                        secao.classList.add('hidden');
+                        secao.classList.remove('flex');
+                    }
+                }
+            });
+        }
+
+        function mostrarToast(mensagem, tipo = 'info') {
+            const toast = document.getElementById('toast');
+            toast.className = `toast toast-${tipo}`;
+            toast.textContent = mensagem;
+            toast.style.display = 'block';
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => { toast.style.display = 'none'; }, 300);
+            }, 3000);
+        }
+
+        function copiarCodigo() {
+            const codigo = document.getElementById('codigo-atual').textContent;
+            navigator.clipboard.writeText(codigo).then(() => {
+                mostrarToast('Código copiado para a área de transferência!', 'success');
+            }).catch(err => {
+                console.error('Erro ao copiar código:', err);
+                mostrarToast('Erro ao copiar código.', 'error');
+            });
+        }
+
+        function alternarPronto() {
+            estouPronto = !estouPronto;
+            const btnPronto = document.getElementById('btn-pronto');
+            if (estouPronto) {
+                btnPronto.classList.add('loading');
+                btnPronto.innerHTML = '⏳ Aguardando...';
+                socket.emit('marcar_pronto', { sala: codigoSala, nome: meuNome, pronto: true });
             } else {
-                botaoIniciarContainer?.classList.add('hidden');
-                botaoProntoContainer?.classList.remove('hidden');
+                btnPronto.classList.remove('loading');
+                btnPronto.innerHTML = `
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
+                    Marcar como Pronto
+                `;
+                socket.emit('marcar_pronto', { sala: codigoSala, nome: meuNome, pronto: false });
             }
         }
 
-        function atualizarVisibilidadeSeletorModo() {
-            const box = document.getElementById('container-modos');
-            if (!box) return;
-            if (souCriador) box.classList.remove('hidden'); else box.classList.add('hidden');
-        }
-
-        function tituloModo(modo) {
-            switch (modo) {
-                case 'cooperativo': return 'Cooperativo';
-                case 'duelo': return 'Duelo (1v1)';
-                case 'relampago': return 'Relâmpago';
-                default: return 'Clássico';
+        function atualizarBotaoIniciarPartida(totalNaoCriadores, totalProntos, habilitado) {
+            const btnIniciar = document.getElementById('btn-iniciar-partida');
+            if (btnIniciar) {
+                btnIniciar.disabled = !habilitado;
+                btnIniciar.classList.toggle('loading', !habilitado);
+                btnIniciar.innerHTML = habilitado ? `
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
+                    Iniciar Partida
+                ` : `
+                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
+                    ⏳ Aguardando Jogadores
+                `;
             }
         }
 
         function setModoUI(modo) {
-            const sel = document.getElementById('select-modo');
-            const desc = document.getElementById('descricao-modo');
-            if (sel) sel.value = modo;
-            if (desc) {
-                const map = {
-                    classico: 'Turnos padrão, todos jogam.',
-                    cooperativo: 'Todos contra o tempo, ajuda mútua.',
-                    duelo: 'Dois jogadores se alternam.',
-                    relampago: 'Turnos curtos e dinâmicos.'
-                };
-                desc.textContent = map[modo] || '';
+            const modoTexto = document.getElementById('descricao-modo');
+            if (modoTexto) {
+                modoTexto.textContent = `Modo: ${tituloModo(modo)}`;
+            }
+            const containerModos = document.getElementById('container-modos');
+            if (containerModos) {
+                containerModos.classList.toggle('hidden', modo !== 'classico');
             }
         }
 
-        // Wire do seletor de modo (apenas criador emite)
-        document.addEventListener('DOMContentLoaded', () => {
-            const sel = document.getElementById('select-modo');
-            sel?.addEventListener('change', () => {
-                const modo = sel.value;
-                if (!souCriador) { setModoUI(modo); return; }
-                socket.emit('selecionar_modo', { sala: codigoSala, nome: meuNome, modo });
-            });
-        });
-
-        // Adicionar botão de transferir host na lista de jogadores (onde já há expulsar)
-        function atualizarTodosJogadores() {
-            if (!estadoJogo) return;
-            const container = document.getElementById('todos-jogadores-container');
-            container.innerHTML = '';
-            const sou_criador_sid = estadoJogo.criador; // SID do criador
-            const euSouCriador = (sou_criador_sid === meuSid);
-            estadoJogo.jogadores.forEach(jogador => {
-                const playerDiv = document.createElement('div');
-                playerDiv.className = 'player-section';
-                const icone = jogador.nome === estadoJogo.jogador_da_vez ? '🎮' : '👤';
-                const status = jogador.nome === estadoJogo.jogador_da_vez ? ' (Jogando)' : '';
-                const descobertas = jogador.palavras_descobertas ? jogador.palavras_descobertas.filter(d => d).length : 0;
-                const total = estadoJogo.config.num_palavras;
-                const nomeAlvo = jogador.alvo || '---';
-
-                const headerDiv = document.createElement('div');
-                headerDiv.className = 'player-header';
-                headerDiv.innerHTML = `<h5>${icone} ${jogador.nome}${status}</h5><span class="player-progress">${descobertas}/${total}</span>`;
-                if (euSouCriador && jogador.nome !== meuNome) {
-                    const btnTransfer = document.createElement('button');
-                    btnTransfer.className = 'btn btn-sm btn-secondary';
-                    btnTransfer.title = 'Transferir liderança para este jogador';
-                    btnTransfer.textContent = '👑';
-                    btnTransfer.onclick = () => transferirHost(jogador.nome);
-                    headerDiv.appendChild(btnTransfer);
-
-                    const btnExpulsar = document.createElement('button');
-                    btnExpulsar.className = 'btn btn-sm btn-danger';
-                    btnExpulsar.title = 'Expulsar jogador';
-                    btnExpulsar.textContent = '🛑';
-                    btnExpulsar.onclick = () => expulsarJogador(jogador.nome);
-                    headerDiv.appendChild(btnExpulsar);
-                }
-                playerDiv.appendChild(headerDiv);
-                playerDiv.innerHTML += `
-                    <div class="player-target-info">
-                        <span class="target-label">Adivinhando palavras de:</span>
-                        <span class="target-name">${nomeAlvo}</span>
-                    </div>
-                    <div class="player-words-grid" id="player-${jogador.nome.replace(/\s+/g, '_')}-grid"></div>
-                `;
-                container.appendChild(playerDiv);
-                const grid = document.getElementById(`player-${jogador.nome.replace(/\s+/g, '_')}-grid`);
-                for (let i = 0; i < total; i++) {
-                    const wordDiv = document.createElement('div');
-                    wordDiv.className = 'mini-word-card';
-                    const descoberta = jogador.palavras_descobertas && jogador.palavras_descobertas[i];
-                    const dica = jogador.dicas && jogador.dicas[i] ? jogador.dicas[i] : '?';
-                    wordDiv.classList.add(descoberta ? 'discovered' : 'not-discovered');
-                    wordDiv.innerHTML = `<div class="mini-word-hint">${dica}</div><div class="mini-word-status">${descoberta ? '✓' : ''}</div>`;
-                    grid.appendChild(wordDiv);
-                }
-            });
-        }
-
-        function transferirHost(nomeJogador) {
-            if (!souCriador) return;
-            if (confirm(`Transferir liderança para ${nomeJogador}?`)) {
-                socket.emit('transferir_criador', { sala: codigoSala, para: nomeJogador });
-            }
+        function tituloModo(modo) {
+            const titulos = {
+                classico: 'Clássico',
+                cooperativo: 'Cooperativo',
+                duelo: 'Duelo (1v1)',
+                relampago: 'Relâmpago'
+            };
+            return titulos[modo] || modo;
         }
 
         function gerarInputsPalavras() {
-            if (!numPalavras || numPalavras <= 0) {
-                console.log('NumPalavras não definido ainda');
-                return;
-            }
-            
             const container = document.getElementById('container-palavras');
-            if (!container) {
-                console.log('Container de palavras não encontrado!');
-                return;
-            }
-            
+            if (!container) return;
             container.innerHTML = '';
-            
+
             for (let i = 1; i <= numPalavras; i++) {
+                const inputDiv = document.createElement('div');
+                inputDiv.className = 'word-input-group flex items-center gap-2';
+
+                const label = document.createElement('label');
+                label.htmlFor = `palavra-${i}`;
+                label.className = 'text-sm text-slate-400';
+                label.textContent = `Palavra ${i}:`;
+
                 const input = document.createElement('input');
                 input.type = 'text';
                 input.id = `palavra-${i}`;
-                input.placeholder = `Palavra ${i}`;
-                input.maxLength = 20;
-                input.required = true;
-                input.className = 'form-input';
-                
-                container.appendChild(input);
+                input.placeholder = 'Digite sua palavra...';
+                input.className = 'flex-1 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500';
+
+                inputDiv.appendChild(label);
+                inputDiv.appendChild(input);
+                container.appendChild(inputDiv);
             }
         }
 
-        function enviarPalavras() {
-            const palavras = [];
-            let todasPreenchidas = true;
-
-            for (let i = 1; i <= numPalavras; i++) {
-                const input = document.getElementById(`palavra-${i}`);
-                const palavra = input.value.trim();
-
-                if (!palavra) {
-                    mostrarToast(`Por favor, preencha a palavra ${i}`, 'error');
-                    input.focus();
-                    return;
-                }
-
-                if (palavra.length < 2) {
-                    mostrarToast(`A palavra ${i} deve ter pelo menos 2 letras`, 'error');
-                    input.focus();
-                    return;
-                }
-
-                if (!/^[a-zA-ZÀ-ÿ\s]+$/.test(palavra)) {
-                    mostrarToast(`A palavra ${i} deve conter apenas letras`, 'error');
-                    input.focus();
-                    return;
-                }
-
-                palavras.push(palavra);
-            }
-
-            socket.emit('enviar_palavras', {
-                sala: codigoSala,
-                nome: meuNome,
-                palavras: palavras
-            });
-        }
-
-        function tentarAdivinhar() {
-            const input = document.getElementById('input-tentativa');
-            const palavra = input.value.trim();
-
-            if (!palavra) {
-                mostrarToast('Digite uma palavra para tentar!', 'error');
-                input.focus();
-                return;
-            }
-
-            socket.emit('tentar_adivinhar', {
-                sala: codigoSala,
-                nome: meuNome,
-                palavra: palavra
-            });
-        }
-
-        function enviarMensagem() {
-            const input = document.getElementById('input-chat');
-            const mensagem = input.value.trim();
-
-            if (!mensagem) return;
-
-            socket.emit('enviar_mensagem_chat', {
-                sala: codigoSala,
-                nome: meuNome,
-                mensagem: mensagem
-            });
-
-            input.value = '';
-        }
-
-        function atualizarInterfaceJogo() {
-            if (!estadoJogo) return;
-
-            // Atualizar indicador de turno
-            const indicador = document.getElementById('indicador-turno');
-            const textoTurno = document.getElementById('texto-turno');
-            const minhaVez = document.getElementById('minha-vez');
-
-            if (estadoJogo.jogador_da_vez === meuNome) {
-                indicador.className = 'turn-indicator my-turn';
-                textoTurno.textContent = 'Sua vez de jogar!';
-                if (minhaVez) minhaVez.classList.remove('hidden');
-            } else {
-                indicador.className = 'turn-indicator opponent-turn';
-                textoTurno.textContent = `Vez de ${estadoJogo.jogador_da_vez}`;
-                if (minhaVez) minhaVez.classList.add('hidden');
-            }
-
-            // Encontrar meus dados e do meu alvo
-            const meusDados = estadoJogo.jogadores.find(j => j.nome === meuNome);
-            if (meusDados) {
-                const meuAlvoElem = document.getElementById('meu-alvo');
-                const dicaAtualElem = document.getElementById('dica-atual');
-                const progressoPalavraElem = document.getElementById('progresso-palavra');
-                
-                if (meuAlvoElem) meuAlvoElem.textContent = meusDados.alvo;
-                if (dicaAtualElem) dicaAtualElem.textContent = meusDados.dica_atual || '---';
-                if (progressoPalavraElem) {
-                    progressoPalavraElem.textContent = `Palavra ${meusDados.palavra_atual_index + 1} de ${estadoJogo.config.num_palavras}`;
-                }
-
-                // Atualizar palavra de referência
-                const palavraReferencia = document.getElementById('palavra-referencia');
-                const valorReferencia = document.getElementById('valor-referencia');
-
-                if (palavraReferencia && valorReferencia) {
-                    if (meusDados.palavra_anterior && meusDados.palavra_anterior.trim()) {
-                        palavraReferencia.style.display = 'block';
-                        valorReferencia.textContent = meusDados.palavra_anterior;
-                    } else {
-                        palavraReferencia.style.display = 'none';
-                    }
-                }
-            }
-
-            // Atualizar minhas palavras (como alvo)
-            const meuAlvo = estadoJogo.jogadores.find(j => j.nome === meusDados?.alvo);
-            if (meuAlvo) {
-                atualizarGridPalavras('minhas-palavras-grid', meuAlvo, true);
-            }
-
-            // Atualizar todos os jogadores
-            atualizarTodosJogadores();
-
-            // Atualizar lista de jogadores no header
-            const jogadores = estadoJogo.jogadores.map(j => j.nome);
-            atualizarListaJogadores(jogadores);
-        }
-
-        function atualizarGridPalavras(gridId, dadosJogador, saoMinhasPalavras) {
-            const grid = document.getElementById(gridId);
-            grid.innerHTML = '';
-
-            for (let i = 0; i < estadoJogo.config.num_palavras; i++) {
-                const div = document.createElement('div');
-                div.className = 'word-card';
-
-                // Determinar se a palavra foi descoberta
-                const descoberta = dadosJogador.palavras_descobertas && dadosJogador.palavras_descobertas[i];
-
-                if (descoberta) {
-                    div.classList.add('discovered');
-                } else {
-                    div.classList.add('not-discovered');
-                }
-
-                const dica = dadosJogador.dicas && dadosJogador.dicas[i] ? dadosJogador.dicas[i] : '?';
-                const status = descoberta ? '✓' : '';
-
-                div.innerHTML = `
-                    <div class="word-number">${i + 1}</div>
-                    <div class="word-hint">${dica}</div>
-                    <div class="word-status">${status}</div>
-                `;
-
-                grid.appendChild(div);
+        function limparInputTentativa() {
+            const inputTentativa = document.getElementById('input-tentativa');
+            if (inputTentativa) {
+                inputTentativa.value = '';
+                inputTentativa.focus();
             }
         }
 
-        function atualizarListaJogadores(jogadores) {
-            const lista = document.getElementById('lista-jogadores-header');
-            lista.innerHTML = '';
+        function mostrarLoading(elemento) {
+            elemento.classList.add('loading');
+        }
 
-            // Filtrar para mostrar apenas os outros jogadores (não o próprio usuário)
-            const outrosJogadores = jogadores.filter(jogador => jogador !== meuNome);
-
-            outrosJogadores.forEach(jogador => {
-                const span = document.createElement('span');
-                span.className = 'player-chip';
-                span.textContent = jogador;
-
-                // Destacar quem está na vez
-                if (estadoJogo && estadoJogo.jogador_da_vez === jogador) {
-                    span.classList.add('target');
-                }
-
-                lista.appendChild(span);
-            });
+        function ocultarLoading(elemento) {
+            elemento.classList.remove('loading');
         }
 
         function atualizarListaJogadoresAguardando(jogadores) {
             const container = document.getElementById('lista-jogadores-aguardando');
             if (!container) return;
             container.innerHTML = '';
-            
-            // Atualizar também o header
-            const headerContainer = document.getElementById('lista-jogadores-header');
-            if (headerContainer) headerContainer.innerHTML = '';
-            
-            jogadores.forEach(nome => {
-                // Para o container principal de espera
+
+            (jogadores || []).forEach(j => {
                 const chip = document.createElement('div');
-                chip.className = 'player-chip';
-                // Adiciona um ícone para cada jogador na lista de espera
-                chip.innerHTML = `👤 ${nome}`;
+                chip.className = 'player-chip not-ready';
+                chip.textContent = `⏳ ${j}`;
                 container.appendChild(chip);
-                
-                // Também atualizar o header se não for meu nome
-                if (nome !== meuNome && headerContainer) {
-                    const headerChip = document.createElement('span');
-                    headerChip.className = 'player-opponent';
-                    headerChip.textContent = nome;
-                    headerContainer.appendChild(headerChip);
+            });
+        }
+
+        function atualizarStatusPalavras(statusJogadores) {
+            (statusJogadores || []).forEach(sj => {
+                const jogadorDiv = document.getElementById(`player-${sj.nome.replace(/\s+/g, '_')}-grid`);
+                if (jogadorDiv) {
+                    jogadorDiv.innerHTML = '';
+                    const totalPalavras = estadoJogo.config.num_palavras;
+                    for (let i = 0; i < totalPalavras; i++) {
+                        const palavraDiv = document.createElement('div');
+                        palavraDiv.className = 'mini-word-card';
+                        const descoberta = sj.palavras_descobertas && sj.palavras_descobertas[i];
+                        const dica = sj.dicas && sj.dicas[i] ? sj.dicas[i] : '?';
+                        palavraDiv.classList.add(descoberta ? 'discovered' : 'not-discovered');
+                        palavraDiv.innerHTML = `<div class="mini-word-hint">${dica}</div><div class="mini-word-status">${descoberta ? '✓' : ''}</div>`;
+                        jogadorDiv.appendChild(palavraDiv);
+                    }
                 }
             });
-            
-            // Mostrar quantos jogadores estão na sala
-            if (jogadores.length >= 2) {
-                document.getElementById('status-sala').innerHTML = 
-                    `<span class="ready-status">✅ ${jogadores.length} jogadores conectados - Prontos para jogar!</span>`;
+        }
+
+        function atualizarBotoesBaseadoNoTipo(jogadores) {
+            const euSouCriador = (jogadores || []).some(j => j.nome === meuNome && j.criador);
+            const todosProntos = (jogadores || []).every(j => j.pronto || j.nome === meuNome);
+            const botaoIniciar = document.getElementById('botao-iniciar-container');
+            const botaoPronto = document.getElementById('botao-pronto-container');
+
+            if (euSouCriador) {
+                // Criador da sala
+                botaoIniciar.classList.remove('hidden');
+                botaoPronto.classList.add('hidden');
             } else {
-                document.getElementById('status-sala').textContent = 
-                    `Aguardando mais jogadores (mínimo: 2)`;
+                // Jogador comum
+                botaoIniciar.classList.add('hidden');
+                botaoPronto.classList.remove('hidden');
+            }
+
+            if (todosProntos) {
+                botaoPronto.classList.add('hidden');
+                botaoIniciar.classList.remove('hidden');
             }
         }
 
@@ -1201,13 +1060,15 @@
             const timestamp = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
             const header = document.createElement('div');
-            header.className = 'history-header';
+            header.className = 'history-header flex items-center gap-2';
+            const img = criarAvatar(avatarMap[jogador], jogador);
             const spanPlayer = document.createElement('span');
             spanPlayer.className = 'history-player';
             spanPlayer.textContent = jogador;
             const spanTime = document.createElement('span');
             spanTime.className = 'history-time';
             spanTime.textContent = timestamp;
+            header.appendChild(img);
             header.appendChild(spanPlayer);
             header.appendChild(spanTime);
 
@@ -1238,11 +1099,13 @@
             div.className = `chat-message ${jogador === meuNome ? 'own' : 'other'}`;
 
             const header = document.createElement('div');
-            header.className = 'message-header';
+            header.className = 'message-header flex items-center gap-2';
+            const img = criarAvatar(avatarMap[jogador], jogador);
             const spanNome = document.createElement('span');
             spanNome.textContent = jogador;
             const spanTime = document.createElement('span');
             spanTime.textContent = timestamp;
+            header.appendChild(img);
             header.appendChild(spanNome);
             header.appendChild(spanTime);
 
@@ -1257,253 +1120,94 @@
             container.scrollTop = container.scrollHeight;
         }
 
-        function limparInputTentativa() {
-            document.getElementById('input-tentativa').value = '';
-        }
-
-        function mostrarSecao(secaoId) {
-            // Esconder todas as seções
-            document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
-            // Mostrar seção específica
-            document.getElementById(secaoId).classList.remove('hidden');
-        }
-
-        function mostrarToast(mensagem, tipo = 'info') {
-            const toast = document.getElementById('toast');
-            toast.textContent = mensagem;
-            toast.className = `toast ${tipo} show`;
-
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
-
-        function copiarCodigo() {
-            const codigo = document.getElementById('codigo-atual').textContent;
-            navigator.clipboard.writeText(codigo).then(() => {
-                mostrarToast('Código copiado!', 'success');
-            }).catch(() => {
-                mostrarToast('Erro ao copiar código', 'error');
-            });
-        }
-
-        function sairDaSala() {
-            if (confirm('Tem certeza que deseja sair da sala?')) {
-                socket.emit('sair_da_sala', {
-                    sala: codigoSala,
-                    nome: meuNome
-                });
-                window.location.href = '/';
-            }
-        }
-
-        function iniciarPartida() {
-            if (confirm('Tem certeza que deseja iniciar a partida? Todos os jogadores atuais serão transferidos para definir suas palavras.')) {
-                // Desabilitar botão temporariamente
-                const botao = document.getElementById('btn-iniciar-partida');
-                botao.disabled = true;
-                botao.textContent = 'Iniciando partida...';
-                
-                socket.emit('iniciar_partida_manual', {
-                    sala: codigoSala,
-                    nome: meuNome
-                });
-            }
-        }
-
-        function alternarPronto() {
-            // Verificar se é criador
-            if (souCriador) {
-                mostrarToast('O criador da sala não precisa marcar-se como pronto', 'warning');
-                return;
-            }
-            
-            estouPronto = !estouPronto;
-            
-            const botao = document.getElementById('btn-pronto');
-            if (estouPronto) {
-                botao.classList.remove('btn-success');
-                botao.classList.add('btn-warning');
-                botao.innerHTML = `
-                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
-                        </path>
-                    </svg>
-                    Cancelar Pronto
-                `;
-            } else {
-                botao.classList.remove('btn-warning');
-                botao.classList.add('btn-success');
-                botao.innerHTML = `
-                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z">
-                        </path>
-                    </svg>
-                    Marcar como Pronto
-                `;
-            }
-            
-            // Enviar status para o servidor
-            socket.emit('marcar_pronto', {
-                sala: codigoSala,
-                nome: meuNome,
-                pronto: estouPronto
-            });
-        }
-
         function atualizarListaJogadoresComStatus(jogadores) {
             const container = document.getElementById('lista-jogadores-aguardando');
             if (!container) return;
             container.innerHTML = '';
-            
-            // Atualizar também o header
-            const headerContainer = document.getElementById('lista-jogadores-header');
-            if (headerContainer) headerContainer.innerHTML = '';
-            
+
+            const ul = document.getElementById('lista-jogadores');
+            if (ul) ul.innerHTML = '';
+
+            const header = document.getElementById('lista-jogadores-header');
+            if (header) header.innerHTML = '';
+
             // Identificar se eu sou o criador
-            const euSouCriador = jogadores.find(j => j.nome === meuNome && j.criador);
-            if (euSouCriador) {
-                souCriador = true;
-            }
-            
-            jogadores.forEach(jogador => {
-                // Para o container principal de espera
+            const euSouCriador = (jogadores || []).some(j => j.nome === meuNome && j.criador);
+            if (euSouCriador) souCriador = true;
+
+            (jogadores || []).forEach(j => {
+                // Chip compacto existente
                 const chip = document.createElement('div');
-                
-                if (jogador.criador) {
-                    // Criador: sem status de pronto
-                    chip.className = 'player-chip criador';
-                    chip.innerHTML = `👑 ${jogador.nome} (Criador)`;
-                } else {
-                    // Jogador normal: com status de pronto
-                    chip.className = `player-chip ${jogador.pronto ? 'ready' : 'not-ready'}`;
-                    const statusIcon = jogador.pronto ? '✅' : '⏳';
-                    chip.innerHTML = `${statusIcon} ${jogador.nome}`;
-                }
-                
+                chip.className = `player-chip ${j.criador ? 'criador' : (j.pronto ? 'ready' : 'not-ready')}`;
+                const statusIcon = j.criador ? '👑' : (j.pronto ? '✅' : '⏳');
+                chip.innerHTML = `${statusIcon} ${j.nome}`;
                 container.appendChild(chip);
-                
-                // Também atualizar o header se não for meu nome
-                if (jogador.nome !== meuNome && headerContainer) {
-                    const headerChip = document.createElement('span');
-                    headerChip.className = 'player-opponent';
-                    headerChip.textContent = jogador.nome;
-                    headerContainer.appendChild(headerChip);
+
+                // Lista detalhada com avatar
+                if (ul) {
+                    const li = document.createElement('li');
+                    li.className = 'flex items-center gap-3 py-2';
+                    const img = criarAvatar(j.avatar, j.nome);
+                    const nome = document.createElement('span');
+                    nome.textContent = j.nome + (j.criador ? ' (Criador)' : '');
+                    const chipStatus = document.createElement('span');
+                    chipStatus.textContent = j.pronto ? 'Pronto' : 'Aguardando';
+                    chipStatus.className = 'text-xs px-2 py-0.5 rounded-full ' + (j.pronto ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300');
+                    li.appendChild(img);
+                    li.appendChild(nome);
+                    li.appendChild(chipStatus);
+                    ul.appendChild(li);
+                }
+
+                // Header (não inclui meu nome)
+                if (j.nome !== meuNome && header) {
+                    const span = document.createElement('span');
+                    span.className = 'player-opponent';
+                    span.textContent = j.nome;
+                    header.appendChild(span);
                 }
             });
-            
-            // Atualizar botões baseado no tipo de usuário
+
             atualizarBotoesBaseadoNoTipo(jogadores);
         }
 
-        function atualizarBotaoIniciarPartida(totalNaoCriadores, jogadoresProntos, todosProntos = false) {
-            const botao = document.getElementById('btn-iniciar-partida');
-            const info = document.getElementById('iniciar-partida-info');
-            if (!botao || !info) return;
-
-            // Recalcular se parâmetros inválidos
-            if (jogadoresProntos > totalNaoCriadores || totalNaoCriadores < 0) {
-                const naoCriadores = (statusJogadores || []).filter(j => !j.criador);
-                const prontosCalc = naoCriadores.filter(j => j.pronto).length;
-                totalNaoCriadores = naoCriadores.length;
-                jogadoresProntos = prontosCalc;
-                todosProntos = totalNaoCriadores > 0 && jogadoresProntos === totalNaoCriadores;
-            }
-
-            if (!souCriador) {
-                // Jogador normal: nunca habilita o botão
-                document.getElementById('botao-iniciar-container').classList.add('hidden');
-                document.getElementById('botao-pronto-container').classList.remove('hidden');
-                return;
-            }
-
-            // Sou criador: mostrar botão iniciar
-            document.getElementById('botao-pronto-container').classList.add('hidden');
-            document.getElementById('botao-iniciar-container').classList.remove('hidden');
-
-            if (totalNaoCriadores === 0) {
-                botao.disabled = true;
-                botao.classList.add('disabled');
-                botao.innerHTML = `
-                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    Aguardando Jogadores
-                `;
-                info.textContent = 'Aguarde outros jogadores entrarem na sala';
-                return;
-            }
-
-            if (todosProntos) {
-                botao.disabled = false;
-                botao.classList.remove('disabled');
-                botao.innerHTML = `
-                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
-                        </path>
-                    </svg>
-                    🚀 Iniciar Partida
-                `;
-                info.textContent = `Todos os ${totalNaoCriadores} jogadores estão prontos!`;
+        // Atualizações de socket para usar avatar
+        socket.on('jogador_entrou', function(data) {
+            salaEncontrada = true;
+            totalJogadores = data.total;
+            maxJogadores = data.max;
+            if (data.jogadores_info) {
+                statusJogadores = data.jogadores_info;
+                atualizarAvatarMap(data.jogadores_info);
+                atualizarListaJogadoresComStatus(data.jogadores_info);
+                const naoCriadores = data.jogadores_info.filter(j => !j.criador);
+                const prontos = naoCriadores.filter(j => j.pronto).length;
+                atualizarBotaoIniciarPartida(naoCriadores.length, prontos, data.todos_prontos === true);
             } else {
-                botao.disabled = true;
-                botao.classList.add('disabled');
-                botao.innerHTML = `
-                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
-                        </path>
-                    </svg>
-                    ⏳ Aguardando Jogadores (${jogadoresProntos}/${totalNaoCriadores})
-                `;
-                info.textContent = `Aguardando ${totalNaoCriadores - jogadoresProntos} jogador(es) ficarem prontos`;
+                atualizarListaJogadoresAguardando(data.jogadores || []);
+                const naoCriadores = (data.jogadores || []).filter(n => n !== meuNome);
+                atualizarBotaoIniciarPartida(naoCriadores.length, 0, false);
             }
-        }
-
-        // Função de tema unificada
-        function alterarTema(tema) {
-            const root = document.documentElement;
-            root.className = root.className
-                .split(' ')
-                .filter(c => !c.startsWith('theme-'))
-                .join(' ')
-                .trim();
-            root.classList.add(tema);
-            localStorage.setItem('tema', tema);
-            mostrarToast(`Tema alterado para: ${tema.replace('theme-', '').charAt(0).toUpperCase() + tema.replace('theme-', '').slice(1)}`, 'success');
-            toggleThemeMenu();
-        }
-
-        // Função para toggle do menu de temas
-        function toggleThemeMenu() {
-            const menu = document.getElementById('theme-menu');
-            menu.classList.toggle('hidden');
-        }
-
-        // Fechar menu de temas ao clicar fora
-        document.addEventListener('click', function (e) {
-            const themeBtn = document.getElementById('theme-btn');
-            const themeMenu = document.getElementById('theme-menu');
-
-            if (!themeBtn.contains(e.target) && !themeMenu.contains(e.target)) {
-                themeMenu.classList.add('hidden');
+            const configInfo = document.getElementById('config-info');
+            if (configInfo) {
+                const modoTxt = data.modo ? ` • Modo: ${tituloModo(data.modo)}` : '';
+                configInfo.textContent = `${data.total}/${data.max} jogadores${modoTxt}`;
             }
+            atualizarVisibilidadeSeletorModo();
+            if (data.modo) setModoUI(data.modo);
         });
 
-        // Função para expulsar jogador por nome
-        function expulsarJogador(nomeJogador) {
-            if (confirm(`Tem certeza que deseja expulsar ${nomeJogador}?`)) {
-                socket.emit('expulsar_jogador', {
-                    sala: codigoSala,
-                    nome: nomeJogador
-                });
-            }
-        }
+        socket.on('status_prontos_atualizado', function(data) {
+            statusJogadores = data.jogadores;
+            atualizarListaJogadoresComStatus(data.jogadores);
+            const naoCriadores = data.jogadores.filter(j => !j.criador);
+            const prontos = naoCriadores.filter(j => j.pronto).length;
+            atualizarBotaoIniciarPartida(naoCriadores.length, prontos, data.todos_prontos === true);
+            const prontosCount = data.jogadores_prontos;
+            const total = data.total_jogadores;
+            const info = document.getElementById('status-pronto-info');
+            if (info) info.textContent = `${prontosCount}/${total} jogadores prontos`;
+        });
     </script>
 </body>
-
 </html>

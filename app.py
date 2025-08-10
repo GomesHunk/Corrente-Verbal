@@ -46,6 +46,102 @@ register_health_routes(app)
 
 salas = {}
 
+# Pool de possíveis "memes" locais (arquivos em static/avatars/<slug>.(svg|webp|png|jpg|jpeg))
+AVATAR_MEME_SLUGS = [
+    "dollynho",
+    "gravida-de-taubate",
+    "galo-cego",
+    "supla",
+    "gretchen",
+    "yudi",
+    "cachorro-caramelo",
+    "meme-troll",
+    "chaves",
+    "tiozao-do-pave",
+]
+
+
+def _dicebear_avatar(seed: str, style: str = "adventurer-neutral", size: int = 80) -> str:
+    s = "".join(ch for ch in str(seed) if ch.isalnum()) or "seed"
+    return f"https://api.dicebear.com/7.x/{style}/svg?seed={s}&radius=50&backgroundType=gradientLinear&size={size}"
+
+
+def _local_avatar_url(slug: str) -> str | None:
+    static_dir = app.static_folder or "static"
+    base = os.path.join(static_dir, "avatars")
+    for ext in (".svg", ".webp", ".png", ".jpg", ".jpeg"):
+        candidate = os.path.join(base, f"{slug}{ext}")
+        if os.path.exists(candidate):
+            return f"/static/avatars/{slug}{ext}"
+    return None
+
+
+def _pick_avatar_url_by_seed(seed: str) -> str:
+    try:
+        idx = abs(hash(seed)) % len(AVATAR_MEME_SLUGS)
+        slug = AVATAR_MEME_SLUGS[idx]
+        local_url = _local_avatar_url(slug)
+        if local_url:
+            return local_url
+    except Exception:
+        pass
+    return _dicebear_avatar(seed)
+
+
+def _get_avatar_for(sala: dict, nome: str) -> str:
+    # Usa player_id se disponível para manter estabilidade; fallback para nome
+    players_ids = sala.get('player_ids', {})
+    seed = players_ids.get(nome.lower()) or nome
+    sala.setdefault('avatars', {})
+    if nome not in sala['avatars']:
+        sala['avatars'][nome] = _pick_avatar_url_by_seed(seed)
+    return sala['avatars'][nome]
+
+
+# ===== Helpers de sala =====
+def nomes_conectados(sala):
+    """Lista de nomes online (derivados de players SID->nome atuais)."""
+    try:
+        return list(sala.get('players', {}).values())
+    except Exception:
+        return []
+
+
+def broadcast_status_prontos(codigo):
+    """Emite o status de prontos considerando apenas jogadores online e excluindo o criador."""
+    try:
+        if codigo not in salas:
+            return
+        sala = salas[codigo]
+        partida = sala['partida']
+        criador_sid = sala.get('criador')
+        nome_criador = sala.get('players', {}).get(criador_sid)
+        nomes_online = set(nomes_conectados(sala))
+        players_prontos = sala.get('players_prontos', set())
+
+        jogadores_info = []
+        for j in partida.jogadores:
+            if j.nome in nomes_online:
+                jogadores_info.append({
+                    'nome': j.nome,
+                    'pronto': j.nome in players_prontos,
+                    'criador': j.nome == nome_criador,
+                    'avatar': _get_avatar_for(sala, j.nome)
+                })
+
+        nao_criadores_online = {n for n in nomes_online if n != nome_criador}
+        prontos_sem_host = sum(1 for n in nao_criadores_online if n in players_prontos)
+        todos_prontos = (len(nao_criadores_online) > 0 and prontos_sem_host == len(nao_criadores_online))
+
+        emit('status_prontos_atualizado', {
+            'jogadores': jogadores_info,
+            'todos_prontos': todos_prontos,
+            'total_jogadores': len(nomes_online),
+            'jogadores_prontos': prontos_sem_host
+        }, room=codigo)
+    except Exception as e:
+        logger.error(f'Erro ao emitir status de prontos: {e}', exc_info=True)
+
 def limpar_salas_inativas():
     """Remove salas inativas (sem jogadores há mais de 1 hora) ou marcadas para remoção (após 5 minutos)"""
     tempo_atual = time.time()
@@ -93,7 +189,7 @@ def verificar_iniciar_jogo(codigo):
     sala = salas[codigo]
     partida = sala['partida']
     
-    # Verificar se temos pelo menos 2 jogadores
+    # Verificar se temos pelo menos 2 jogadores EFETIVAMENTE NA PARTIDA
     if len(partida.jogadores) < 2:
         logger.info(f'Sala {codigo}: Aguardando mais jogadores ({len(partida.jogadores)}/2)')
         return False
@@ -234,6 +330,15 @@ def on_disconnect():
             
             # Remover da lista de players deste SID
             del sala['players'][request.sid]
+
+            # Remover do set de prontos imediatamente para não travar o início
+            try:
+                sala.setdefault('players_prontos', set()).discard(nome_jogador)
+            except Exception:
+                pass
+
+            # Atualizar status de prontos
+            broadcast_status_prontos(codigo)
             
             # Se for o criador, promover automaticamente outro jogador se houver
             if request.sid == sala['criador']:
@@ -251,7 +356,6 @@ def on_disconnect():
                 # Atualizar o último acesso
                 sala['ultimo_acesso'] = tempo_atual
                 continue
-                
             # Verificar se o jogador ainda tem conexões ativas (em outras abas)
             jogador_ainda_conectado = False
             for sid, nome in sala['players'].items():
@@ -285,8 +389,13 @@ def criar_sala(data):
         num_palavras = int(data.get('num_palavras', 5))
         # Tornar max_jogadores opcional - usar 10 como padrão (máximo)
         max_jogadores = int(data.get('max_jogadores', 10)) 
+        modo = (data.get('modo') or 'classico').strip().lower()
+        if modo not in ('classico', 'cooperativo', 'duelo', 'relampago'):
+            modo = 'classico'
+        # Novo: capturar player_id (para identidade estável/avatares)
+        player_id = (data or {}).get('player_id')
 
-        logger.info(f'Parâmetros processados: nome={nome}, palavras={num_palavras}, max={max_jogadores}')
+        logger.info(f'Parâmetros processados: nome={nome}, palavras={num_palavras}, max={max_jogadores}, modo={modo}')
 
         # Validações básicas
         if not nome:
@@ -323,21 +432,22 @@ def criar_sala(data):
         jogador = Jogador(nome, config.num_palavras)
         partida.adicionar_jogador(jogador)
 
-        # Salva o estado da sala com SID do criador e mapa de players
+        # Salva o estado da sala
         tempo_atual = time.time()
         salas[codigo] = {
             'partida': partida,
-            'criador': request.sid,       # SID do socket que criou
-            'players': {                  # map SID → nome
-                request.sid: nome
-            },
-            'players_prontos': set(),     # conjunto de jogadores prontos
-            'palavras': {},               # opcional, se usada (map SID → palavras)
-            'player_ids': {},             # map nome_lower → player_id
-            'ultimo_acesso': tempo_atual,  # timestamp para controle de salas inativas
-            'criada_em': tempo_atual,      # timestamp de criação da sala
-            'modo': 'classico'             # modo padrão
+            'criador': request.sid,
+            'players': { request.sid: nome },
+            'players_prontos': set(),
+            'palavras': {},
+            'player_ids': { nome.lower(): player_id } if player_id else {},
+            'avatars': {},
+            'ultimo_acesso': tempo_atual,
+            'criada_em': tempo_atual,
+            'modo': modo,
         }
+        # Definir avatar do criador
+        _get_avatar_for(salas[codigo], nome)
 
         logger.info(f'Sala {codigo} salva no dicionário. Total de salas: {len(salas)}')
 
@@ -355,7 +465,7 @@ def criar_sala(data):
             },
             'players': salas[codigo]['players'],
             'criador': salas[codigo]['criador'],
-            'modo': 'classico'
+            'modo': modo
         }
 
         logger.info(f'Enviando resposta sala_criada: {resposta}')
@@ -383,7 +493,7 @@ def entrar_na_sala(data):
         codigo_original = data.get('sala', '')
         codigo = codigo_original.strip().upper()
         nome = data.get('nome', '').strip()
-        player_id = data.get('player_id')
+        player_id = (data or {}).get('player_id')
         
         logger.info(f'Tentativa de entrar na sala: "{codigo}" por jogador "{nome}" (SID: {request.sid})')
 
@@ -407,11 +517,11 @@ def entrar_na_sala(data):
 
         # Armazenar/validar player_id para o nome
         sala.setdefault('player_ids', {})
+        sala.setdefault('avatars', {})
         nome_key = nome.lower()
         if player_id:
             existente_pid = sala['player_ids'].get(nome_key)
             if existente_pid and existente_pid != player_id:
-                # Nome já usado por outro player_id - rejeitar
                 emit('erro', {'msg': 'Este nome já está em uso na sala. Escolha outro.'})
                 return
             sala['player_ids'][nome_key] = player_id
@@ -464,6 +574,8 @@ def entrar_na_sala(data):
         # Entrar na room e registrar este SID → nome
         join_room(codigo)
         sala['players'][request.sid] = nome
+        # Garantir avatar do jogador
+        _get_avatar_for(sala, nome)
 
         # Limpar marca de desconexão se houver
         if 'desconexoes' in sala and nome in sala['desconexoes']:
@@ -473,7 +585,7 @@ def entrar_na_sala(data):
                 pass
             emit('aviso', {'msg': f'{nome} reconectou.'}, room=codigo)
 
-        # Preparar informações dos jogadores com status de pronto
+        # Preparar informações dos jogadores com status de pronto (APENAS online)
         jogadores_info = []
         players_prontos = sala.get('players_prontos', set())
         criador_sid_atual = sala.get('criador')
@@ -482,18 +594,21 @@ def entrar_na_sala(data):
             if sid == criador_sid_atual:
                 nome_criador_atual = nome_player
                 break
+        nomes_online = set(nomes_conectados(sala))
         for j in partida.jogadores:
-            jogadores_info.append({
-                'nome': j.nome,
-                'pronto': j.nome in players_prontos,
-                'criador': j.nome == nome_criador_atual
-            })
+            if j.nome in nomes_online:
+                jogadores_info.append({
+                    'nome': j.nome,
+                    'pronto': j.nome in players_prontos,
+                    'criador': j.nome == nome_criador_atual,
+                    'avatar': _get_avatar_for(sala, j.nome)
+                })
 
-        # Broadcast do estado atual (não incluir sou_criador aqui!)
+        # Broadcast do estado atual
         emit('jogador_entrou', {
             'jogador': nome,
             'jogadores': [j.nome for j in partida.jogadores],
-            'total': len(partida.jogadores),
+            'total': len(nomes_online),
             'max': partida.config.max_jogadores,
             'jogadores_info': jogadores_info,
             'todos_prontos': verificar_todos_prontos(codigo),
@@ -504,7 +619,8 @@ def entrar_na_sala(data):
         emit('meu_status', {
             'sou_criador': eh_criador_desta_conexao or (request.sid == sala.get('criador')),
             'nome': nome,
-            'sala': codigo
+            'sala': codigo,
+            'avatar': sala['avatars'].get(nome)
         })
 
         # Se o jogador já tinha enviado palavras, avisar
@@ -562,6 +678,12 @@ def expulsar_jogador(data):
         # Remover do dicionário de players
         if alvo_sid in salas[sala]['players']:
             del salas[sala]['players'][alvo_sid]
+        
+        # Remover do set de prontos
+        salas[sala].setdefault('players_prontos', set()).discard(nome_alvo)
+        
+        # Atualizar status de prontos
+        broadcast_status_prontos(sala)
         
         # Notificar o alvo
         emit('foi_expulso', {}, room=alvo_sid)
@@ -847,10 +969,14 @@ def iniciar_partida_manual(data):
             emit('error', {'msg': 'Apenas o criador pode iniciar a partida'})
             return
         
-        # Verificar se todos estão prontos
+        # Verificar se todos estão prontos (apenas online, exceto criador)
         if not verificar_todos_prontos(codigo):
+            nomes_online = set(nomes_conectados(sala))
+            criador_sid = sala.get('criador')
+            nome_criador = sala.get('players', {}).get(criador_sid)
+            nao_criadores_online = [n for n in nomes_online if n != nome_criador]
             players_prontos = sala.get('players_prontos', set())
-            jogadores_nao_prontos = [j.nome for j in partida.jogadores if j.nome not in players_prontos]
+            jogadores_nao_prontos = [n for n in nao_criadores_online if n not in players_prontos]
             emit('error', {'msg': f'Nem todos estão prontos. Aguardando: {", ".join(jogadores_nao_prontos)}'})
             return
         
@@ -869,7 +995,7 @@ def iniciar_partida_manual(data):
         emit('error', {'msg': 'Erro interno do servidor'})
 
 def verificar_todos_prontos(codigo):
-    """Verifica se todos os jogadores (exceto criador) estão prontos para iniciar"""
+    """Verifica se todos os jogadores ONLINE (exceto criador) estão prontos para iniciar"""
     if codigo not in salas:
         return False
     
@@ -877,29 +1003,21 @@ def verificar_todos_prontos(codigo):
     partida = sala['partida']
     players_prontos = sala.get('players_prontos', set())
     
-    # Precisa ter pelo menos 2 jogadores
-    if len(partida.jogadores) < 2:
+    # Precisa ter pelo menos 2 na partida e pelo menos 2 online
+    nomes_online = set(nomes_conectados(sala))
+    if len(partida.jogadores) < 2 or len(nomes_online) < 2:
         return False
     
     # Identificar o criador da sala
     criador_sid = sala.get('criador')
-    nome_criador = None
+    nome_criador = sala.get('players', {}).get(criador_sid)
     
-    # Encontrar nome do criador através do SID
-    for sid, nome in sala.get('players', {}).items():
-        if sid == criador_sid:
-            nome_criador = nome
-            break
-    
-    # Pegar todos os jogadores exceto o criador
-    jogadores_nao_criadores = [j.nome for j in partida.jogadores if j.nome != nome_criador]
-    
-    # Se não há jogadores além do criador, não pode iniciar
-    if len(jogadores_nao_criadores) == 0:
+    # Apenas não-criadores online contam
+    nao_criadores_online = {n for n in nomes_online if n != nome_criador}
+    if not nao_criadores_online:
         return False
     
-    # Verificar se todos os jogadores (exceto criador) estão prontos
-    return all(nome in players_prontos for nome in jogadores_nao_criadores)
+    return all(n in players_prontos for n in nao_criadores_online)
 
 @socketio.on('marcar_pronto')
 def marcar_pronto(data):
@@ -923,51 +1041,26 @@ def marcar_pronto(data):
         partida = sala['partida']
         criador_sid = sala.get('criador')
         
-        # Verificar se é o criador tentando marcar pronto
-        nome_criador = None
-        for sid, nome_player in sala.get('players', {}).items():
-            if sid == criador_sid:
-                nome_criador = nome_player
-                break
-                
+        # Criador não marca pronto
         if request.sid == criador_sid:
-            emit('error', {'msg': 'O criador da sala não precisa marcar-se como pronto'})
             return
         
         # Verificar se o jogador está na sala
-        jogador_existe = any(j.nome == nome for j in partida.jogadores)
-        if not jogador_existe:
+        if not any(j.nome == nome for j in partida.jogadores):
             emit('error', {'msg': 'Jogador não encontrado na sala'})
             return
         
         # Atualizar status de pronto
-        if 'players_prontos' not in sala:
-            sala['players_prontos'] = set()
-        
+        sala.setdefault('players_prontos', set())
         if pronto:
             sala['players_prontos'].add(nome)
         else:
             sala['players_prontos'].discard(nome)
         
-        # Preparar informações dos jogadores com status de pronto
-        jogadores_info = []
-        for jogador in partida.jogadores:
-            jogadores_info.append({
-                'nome': jogador.nome,
-                'pronto': jogador.nome in sala['players_prontos'],
-                'criador': jogador.nome == nome_criador
-            })
+        # Emite status atualizado para todos
+        broadcast_status_prontos(codigo)
         
-        todos_prontos = verificar_todos_prontos(codigo)
-        
-        emit('status_prontos_atualizado', {
-            'jogadores': jogadores_info,
-            'todos_prontos': todos_prontos,
-            'total_jogadores': len(partida.jogadores),
-            'jogadores_prontos': len(sala['players_prontos'])
-        }, room=codigo)
-        
-        logger.info(f'Status atualizado na sala {codigo}: {len(sala["players_prontos"])}/{len(partida.jogadores)} prontos')
+        logger.info(f'Status de prontos emitido para sala {codigo}')
         
     except Exception as e:
         logger.error(f'Erro ao marcar pronto: {e}', exc_info=True)
@@ -1056,6 +1149,15 @@ def sair_da_sala(data):
         # Remover do mapa de sockets
         if request.sid in sala['players']:
             del sala['players'][request.sid]
+
+        # Remover do set de prontos
+        try:
+            sala.setdefault('players_prontos', set()).discard(nome)
+        except Exception:
+            pass
+
+        # Atualizar status de prontos
+        broadcast_status_prontos(codigo)
 
         # Remover jogador da partida pelo nome
         nomes_antes = [j.nome for j in partida.jogadores]

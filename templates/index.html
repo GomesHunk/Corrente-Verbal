@@ -4,494 +4,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Corrente Verbal</title>
+    <title>Corrente Verbal - Início</title>
+    <link rel="stylesheet" href="/static/style.css">
     <!-- Tailwind CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      // Configurar Tailwind para dark mode via classe (compatível com seus temas)
-      window.tailwind = window.tailwind || {};
-      tailwind.config = { darkMode: 'class' };
-    </script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js" integrity="sha384-+fv93K7xKq4yqIQp3lHzuFhgr9gU0CggE2m0bA8D7pKvhSukP3iMNI5JmYzoZ6Zt" crossorigin="anonymous"></script>
 </head>
 
-<body class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-black text-slate-100">
-    <div class="container max-w-3xl mx-auto p-6 md:p-8">
-        <div class="card rounded-2xl border border-white/10 bg-white/5 backdrop-blur shadow-2xl shadow-black/40">
-            <div class="p-6 md:p-8">
-                <h1 class="text-3xl md:text-4xl font-bold tracking-tight">Corrente Verbal</h1>
-                <p class="text-center text-slate-300 mb-6 md:mb-8">Desafie seus amigos em uma batalha de palavras!</p>
-
-                <!-- Como Jogar -->
-                <div class="how-to-play">
-                    <h2 class="text-2xl font-semibold mb-3 flex items-center gap-2">
-                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        Como Jogar
-                    </h2>
-                    <ul class="steps space-y-2 text-slate-200">
-                        <li class="step">Cada jogador define suas palavras secretas</li>
-                        <li class="step">A primeira palavra é mostrada completa, as outras apenas a inicial</li>
-                        <li class="step">Tente adivinhar sequencialmente: palavra 1, depois 2, depois 3...</li>
-                        <li class="step">Ao errar, ganha uma letra extra da palavra atual</li>
-                        <li class="step">Vence quem descobrir todas as palavras do adversário primeiro!</li>
-                    </ul>
-                </div>
-
-                <!-- Formulário -->
-                <div class="form-section mt-6">
-                    <div class="input-group">
-                        <label for="nome-input">
-                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                            </svg>
-                            Seu nome:
-                        </label>
-                        <div class="name-avatar-container">
-                            <input type="text" id="nome-input" placeholder="Digite seu nome" maxlength="20" autocomplete="off">
-                            <div class="avatar-selector">
-                                <div class="avatar-current" id="avatar-current" onclick="toggleAvatarMenu()">
-                                    <span class="avatar-emoji">👤</span>
-                                </div>
-                                <div class="avatar-dropdown hidden" id="avatar-dropdown">
-                                    <div class="avatar-option" onclick="selecionarAvatar('👤')" data-avatar="👤">👤</div>
-                                    <div class="avatar-option" onclick="selecionarAvatar('😊')" data-avatar="😊">😊</div>
-                                    <div class="avatar-option" onclick="selecionarAvatar('😎')" data-avatar="😎">😎</div>
-                                    <div class="avatar-option" onclick="selecionarAvatar('🚀')" data-avatar="🚀">🚀</div>
-                                    <div class="avatar-option" onclick="selecionarAvatar('⚡')" data-avatar="⚡">⚡</div>
-                                    <div class="avatar-option" onclick="selecionarAvatar('🎮')" data-avatar="🎮">🎮</div>
-                                    <div class="avatar-option" onclick="selecionarAvatar('🔥')" data-avatar="🔥">🔥</div>
-                                    <div class="avatar-option" onclick="selecionarAvatar('💎')" data-avatar="💎">💎</div>
-                                    <div class="avatar-option" onclick="selecionarAvatar('🌟')" data-avatar="🌟">🌟</div>
-                                    <div class="avatar-option" onclick="selecionarAvatar('🎯')" data-avatar="🎯">🎯</div>
-                                    <div class="avatar-option" onclick="selecionarAvatar('🏆')" data-avatar="🏆">🏆</div>
-                                    <div class="avatar-option" onclick="selecionarAvatar('🎪')" data-avatar="🎪">🎪</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Configurações da Sala (inicialmente oculta) -->
-                    <div id="config-section" class="hidden">
-                        <h3 class="text-xl font-semibold mb-4">Configurações da Sala</h3>
-                        <div class="config-section space-y-4">
-                            <div class="config-item">
-                                <label for="max-jogadores" class="flex flex-col">
-                                    <span class="font-medium">Máximo de jogadores:</span>
-                                    <small class="config-help text-slate-400">Suporte de 2 até 10 jogadores simultâneos</small>
-                                </label>
-                                <div class="range-input flex items-center gap-2">
-                                    <input type="range" id="max-jogadores" min="2" max="10" value="4"
-                                        class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
-                                    <span class="range-value" id="max-jogadores-value">4</span>
-                                    <span class="range-label text-slate-300">jogadores</span>
-                                </div>
-                            </div>
-                            <div class="config-item">
-                                <label for="num-palavras" class="flex flex-col">
-                                    <span class="font-medium">Número de palavras:</span>
-                                    <small class="config-help text-slate-400">Quantas palavras cada jogador deve adivinhar</small>
-                                </label>
-                                <div class="range-input flex items-center gap-2">
-                                    <input type="range" id="num-palavras" min="4" max="8" value="5"
-                                        class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
-                                    <span class="range-value" id="num-palavras-value">5</span>
-                                    <span class="range-label text-slate-300">palavras</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="main-actions flex flex-col md:flex-row md:gap-4">
-                        <button class="btn btn-primary btn-large" onclick="mostrarConfiguracoes()">
-                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                            </svg>
-                            Criar Sala
-                        </button>
-                        <button class="btn btn-secondary btn-large" onclick="mostrarEntrarSala()">
-                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013 3v1">
-                                </path>
-                            </svg>
-                            Entrar em Sala
-                        </button>
-                        <div class="theme-selector-wrapper">
-                            <button class="btn btn-secondary btn-large" onclick="toggleThemeMenu()" id="theme-btn">
-                                🎨 Tema
-                            </button>
-                            <div class="theme-menu-dropdown hidden" id="theme-menu">
-                                <div class="theme-thumb" onclick="alterarTema('theme-light')" title="Claro">
-                                    <img src="/static/themes/sun.svg" alt="Claro" />
-                                </div>
-                                <div class="theme-thumb" onclick="alterarTema('theme-dark')" title="Escuro">
-                                    <img src="/static/themes/moon.svg" alt="Escuro" />
-                                </div>
-                                <div class="theme-thumb" onclick="alterarTema('theme-matrix')" title="Matrix">
-                                    <img src="/static/themes/matrix.svg" alt="Matrix" />
-                                </div>
-                                <div class="theme-thumb" onclick="alterarTema('theme-starwars')" title="Star Wars">
-                                    <img src="/static/themes/starwars.svg" alt="Star Wars" />
-                                </div>
-                                <div class="theme-thumb" onclick="alterarTema('theme-strangerthings')" title="Stranger Things">
-                                    <img src="/static/themes/strangerthings.svg" alt="Stranger Things" />
-                                </div>
-                                <div class="theme-thumb" onclick="alterarTema('theme-flamengo')" title="Flamengo">
-                                    <img src="/static/themes/flamengo.svg" alt="Flamengo" />
-                                </div>
-                                <div class="theme-thumb" onclick="alterarTema('theme-botafogo')" title="Botafogo">
-                                    <img src="/static/themes/botafogo.svg" alt="Botafogo" />
-                                </div>
-                                <div class="theme-thumb" onclick="alterarTema('theme-vasco')" title="Vasco">
-                                    <img src="/static/themes/vasco.svg" alt="Vasco" />
-                                </div>
-                                <div class="theme-thumb" onclick="alterarTema('theme-fluminense')" title="Fluminense">
-                                    <img src="/static/themes/fluminense.svg" alt="Fluminense" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Botão de confirmar criação (inicialmente oculto) -->
-                    <div id="criar-sala-final" class="hidden">
-                        <button class="btn btn-success btn-large" onclick="criarSala()">
-                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            Confirmar e Criar Sala
-                        </button>
-                    </div>
-
-                    <!-- Seção para entrar em sala (inicialmente oculta) -->
-                    <div id="entrar-sala-section" class="hidden">
-                        <div class="input-group">
-                            <label for="codigo-input">
-                                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
-                                    </path>
-                                </svg>
-                                Código da sala:
-                            </label>
-                            <input type="text" id="codigo-input" placeholder="Digite o código da sala" maxlength="6"
-                                autocomplete="off">
-                        </div>
-                        <button class="btn btn-success btn-large" onclick="entrarSala()">
-                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            Entrar na Sala
-                        </button>
-                    </div>
-                </div>
+<body class="min-h-full bg-slate-50 text-slate-800">
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <header class="flex items-center justify-between mb-8">
+            <h1 class="text-3xl font-bold">Corrente Verbal</h1>
+            <div class="flex items-center gap-2">
+                <label for="themeSelect" class="text-sm">Tema</label>
+                <select id="themeSelect" class="rounded-md border px-2 py-1 text-sm">
+                    <option value="sun">Claro</option>
+                    <option value="moon">Escuro</option>
+                    <option value="matrix">Matrix</option>
+                    <option value="starwars">Star Wars</option>
+                    <option value="strangerthings">Stranger Things</option>
+                    <option value="flamengo">Flamengo</option>
+                    <option value="fluminense">Fluminense</option>
+                    <option value="botafogo">Botafogo</option>
+                    <option value="vasco">Vasco</option>
+                </select>
             </div>
-        </div>
+        </header>
+
+        <main class="grid md:grid-cols-2 gap-8">
+            <section class="bg-white rounded-xl shadow p-6">
+                <h2 class="text-xl font-semibold mb-4">Criar sala</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm mb-1" for="nomeCriador">Seu nome</label>
+                        <input id="nomeCriador" type="text" maxlength="20" class="w-full rounded-md border px-3 py-2"
+                            placeholder="Ex: Ana" />
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-1" for="numPalavras">Palavras por jogador</label>
+                        <input id="numPalavras" type="number" min="3" max="10" value="5"
+                            class="w-full rounded-md border px-3 py-2" />
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-1" for="maxJogadores">Máximo de jogadores</label>
+                        <input id="maxJogadores" type="number" min="2" max="10" value="10"
+                            class="w-full rounded-md border px-3 py-2" />
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-1" for="modoJogo">Modo de jogo</label>
+                        <select id="modoJogo" class="w-full rounded-md border px-3 py-2">
+                            <option value="classico">Clássico</option>
+                            <option value="cooperativo">Cooperativo</option>
+                            <option value="duelo">Duelo</option>
+                            <option value="relampago">Relâmpago</option>
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1" id="descricaoModo">
+                          Clássico: cada um escreve palavras, adivinha na sua vez. Mais flexível e descontraído.
+                        </p>
+                    </div>
+                    <button id="btnCriar"
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-md py-2 font-medium">
+                        Criar sala
+                    </button>
+                </div>
+            </section>
+
+            <section class="bg-white rounded-xl shadow p-6">
+                <h2 class="text-xl font-semibold mb-4">Entrar em sala</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm mb-1" for="nomeJogador">Seu nome</label>
+                        <input id="nomeJogador" type="text" maxlength="20" class="w-full rounded-md border px-3 py-2"
+                            placeholder="Ex: João" />
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-1" for="codigoSala">Código da sala</label>
+                        <input id="codigoSala" type="text" class="w-full rounded-md border px-3 py-2 uppercase"
+                            placeholder="ABC123" />
+                    </div>
+                    <button id="btnEntrar"
+                        class="w-full bg-slate-800 hover:bg-slate-900 text-white rounded-md py-2 font-medium">
+                        Entrar
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <section class="mt-10 bg-white rounded-xl shadow p-6">
+            <h3 class="text-lg font-semibold mb-2">Como jogar</h3>
+            <ol class="list-decimal pl-6 space-y-1 text-sm">
+                <li>Crie uma sala, escolha o modo e compartilhe o código com seus amigos.</li>
+                <li>Cada jogador digita suas palavras. O criador inicia a partida quando todos estiverem prontos.</li>
+                <li>Na sua vez, dê dicas para seu alvo adivinhar as palavras dentro do tempo.</li>
+                <li>Experimente modos como Cooperativo, Duelo e Relâmpago para variações divertidas.</li>
+            </ol>
+        </section>
     </div>
 
-    <!-- Toast para notificações -->
-    <div id="toast" class="toast"></div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
     <script>
-        let socket;
+        const socket = io();
 
-        // Inicializar Socket.IO com configurações robustas
-        let reconnectAttempts = 0;
-        const maxReconnectAttempts = 3;
+        // Tema
+        const themeSelect = document.getElementById('themeSelect');
+        function applyTheme(theme) {
+          document.documentElement.setAttribute('data-theme', theme);
+          localStorage.setItem('theme', theme);
+        }
+        const savedTheme = localStorage.getItem('theme') || 'sun';
+        themeSelect.value = savedTheme;
+        applyTheme(savedTheme);
+        themeSelect.addEventListener('change', (e) => applyTheme(e.target.value));
 
-        document.addEventListener('DOMContentLoaded', function () {
-            // Configuração mais conservadora para produção
-            socket = io({
-                transports: ['polling', 'websocket'],
-                upgrade: true,
-                timeout: 30000,          // 30 segundos
-                reconnection: true,
-                reconnectionDelay: 2000, // 2 segundos entre tentativas
-                reconnectionAttempts: 3, // Apenas 3 tentativas
-                maxReconnectionAttempts: 3,
-                forceNew: false
-            });
-
-            // Adicionar logs detalhados
-            socket.on('connect', function () {
-                console.log('[SOCKET] Conectado ao servidor');
-                console.log('[SOCKET] Socket ID:', socket.id);
-                reconnectAttempts = 0; // Reset contador
-            });
-
-            socket.on('disconnect', function (reason) {
-                console.log('[SOCKET] Desconectado:', reason);
-                if (reason === 'io server disconnect') {
-                    // O servidor forçou a desconexão, reconectar manualmente
-                    socket.connect();
-                }
-            });
-
-            socket.on('connect_error', function (error) {
-                console.error('[SOCKET] Erro de conexão:', error);
-                reconnectAttempts++;
-                
-                if (reconnectAttempts >= maxReconnectAttempts) {
-                    console.log('[SOCKET] Máximo de tentativas atingido, parando reconexão');
-                    socket.disconnect();
-                    mostrarToast('Erro de conexão. Recarregue a página.', 'error');
-                    return;
-                }
-                
-                mostrarToast(`Problemas de conexão... (${reconnectAttempts}/${maxReconnectAttempts})`, 'warning');
-            });
-
-            socket.on('reconnect', function (attemptNumber) {
-                console.log('[SOCKET] Reconectado após', attemptNumber, 'tentativas');
-                mostrarToast('Reconectado ao servidor!', 'success');
-                reconnectAttempts = 0;
-            });
-
-            socket.on('reconnecting', function (attemptNumber) {
-                console.log('[SOCKET] Tentando reconectar...', attemptNumber);
-                if (attemptNumber <= maxReconnectAttempts) {
-                    mostrarToast(`Reconectando (${attemptNumber}/${maxReconnectAttempts})...`, 'info');
-                }
-            });
-
-            socket.on('sala_criada', function (data) {
-                console.log('[DEBUG] Sala criada:', data);
-                
-                // Armazenar dados da sala
-                window.codigoSalaCriada = data.codigo;
-                window.nomeJogadorCriador = data.nome;
-                window.numPalavrasSala = data.config.num_palavras;
-                
-                // Mostrar mensagem e redirecionar automaticamente
-                mostrarToast("Sala criada! Redirecionando...", "success");
-                
-                // Redirecionar automaticamente para a sala
-                setTimeout(() => {
-                    const codigo = data.codigo;
-                    const nome = data.nome;
-                    const numPalavras = data.config.num_palavras;
-                    window.location.href = `/sala/${codigo}?jogador=${encodeURIComponent(nome)}&num_palavras=${numPalavras}`;
-                }, 1000);
-            });
-
-            socket.on('erro', function (data) {
-                console.error('[SOCKET] Erro:', data);
-                mostrarToast(data.msg, 'error');
-            });
-        });
-        function mostrarToast(mensagem, tipo = "info") {
-            const toast = document.getElementById("toast");
-            toast.textContent = mensagem;
-            toast.className = `toast ${tipo} show`;
-
-            setTimeout(() => {
-                toast.classList.remove("show");
-            }, 3000);
+        // PlayerId persistente
+        function ensurePlayerId() {
+          let pid = localStorage.getItem('playerId');
+          if (!pid) {
+            pid = 'p_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+            localStorage.setItem('playerId', pid);
+          }
+          return pid;
         }
 
-        function mostrarConfiguracoes() {
-            const nome = document.getElementById("nome-input").value.trim();
-
-            if (!nome) {
-                mostrarToast("Por favor, digite seu nome primeiro!", "error");
-                document.getElementById("nome-input").focus();
-                return;
-            }
-
-            if (nome.length > 20) {
-                mostrarToast("Nome deve ter no máximo 20 caracteres!", "error");
-                return;
-            }
-
-            // Mostrar configurações
-            document.getElementById("config-section").classList.remove("hidden");
-            document.getElementById("criar-sala-final").classList.remove("hidden");
-
-            // Esconder botões iniciais
-            document.querySelector(".main-actions").classList.add("hidden");
-        }
-        function mostrarEntrarSala() {
-            const nome = document.getElementById("nome-input").value.trim();
-
-            if (!nome) {
-                mostrarToast("Por favor, digite seu nome primeiro!", "error");
-                document.getElementById("nome-input").focus();
-                return;
-            }
-
-            if (nome.length > 20) {
-                mostrarToast("Nome deve ter no máximo 20 caracteres!", "error");
-                return;
-            }
-
-            const section = document.getElementById("entrar-sala-section");
-            section.classList.toggle("hidden");
-
-            if (!section.classList.contains("hidden")) {
-                document.getElementById("codigo-input").focus();
-            }
-
-        }
-
-        function criarSala() {
-            const nome = document.getElementById("nome-input").value.trim();
-            const numPalavras = parseInt(document.getElementById("num-palavras").value);
-            const maxJogadores = parseInt(document.getElementById("max-jogadores").value);
-            
-            console.log('[DEBUG] Criando sala:', { nome, numPalavras, maxJogadores });
-            
-            if (!nome) {
-                mostrarToast('Por favor, digite seu nome', 'error');
-                return;
-            }
-            
-            if (!socket.connected) {
-                mostrarToast('Conectando ao servidor...', 'info');
-                // Tentar reconectar se necessário
-                if (reconnectAttempts < maxReconnectAttempts) {
-                    socket.connect();
-                    setTimeout(criarSala, 3000); // Tentar novamente em 3s
-                } else {
-                    mostrarToast('Erro de conexão. Recarregue a página.', 'error');
-                }
-                return;
-            }
-            
-            mostrarToast('Criando sala...', 'info');
-            
-            const dados = {
-                nome: nome,
-                num_palavras: numPalavras,
-                max_jogadores: maxJogadores
-            };
-            
-            console.log('[DEBUG] Enviando dados:', dados);
-            socket.emit('criar_sala', dados);
-        }
-
-        function entrarSala() {
-            const nome = document.getElementById("nome-input").value.trim();
-            const codigo = document.getElementById("codigo-input").value.trim().toUpperCase();
-
-            if (!codigo) {
-                mostrarToast("Por favor, digite o código da sala!", "error");
-                document.getElementById("codigo-input").focus();
-                return;
-            }
-
-            if (codigo.length !== 6) {
-                mostrarToast("Código da sala deve ter 6 caracteres!", "error");
-                return;
-            }
-
-            // Redirecionar para a sala
-            window.location.href = `/sala/${codigo}?jogador=${encodeURIComponent(nome)}`;
-        }
-
-        // Gerenciar seletor de avatar
-        let avatarSelecionado = '👤';
-
-        function toggleAvatarMenu() {
-            const dropdown = document.getElementById("avatar-dropdown");
-            dropdown.classList.toggle("hidden");
-        }
-
-        function selecionarAvatar(emoji) {
-            avatarSelecionado = emoji;
-            document.getElementById("avatar-current").querySelector('.avatar-emoji').textContent = emoji;
-            document.getElementById("avatar-dropdown").classList.add("hidden");
-        }
-
-        // Fechar dropdown de avatar ao clicar fora
-        document.addEventListener("click", function(e) {
-            const avatarSelector = document.querySelector('.avatar-selector');
-            if (!avatarSelector.contains(e.target)) {
-                document.getElementById("avatar-dropdown").classList.add("hidden");
-            }
+        // Descrição dinâmica do modo
+        const modoJogoEl = document.getElementById('modoJogo');
+        const descricaoModoEl = document.getElementById('descricaoModo');
+        const descricoes = {
+          classico: 'Clássico: cada um escreve palavras, adivinha na sua vez. Mais flexível e descontraído.',
+          cooperativo: 'Cooperativo: todos contra o tempo, objetivo comum.',
+          duelo: 'Duelo: 1x1 com rodadas rápidas.',
+          relampago: 'Relâmpago: partidas curtas e intensas.'
+        };
+        modoJogoEl.addEventListener('change', () => {
+          descricaoModoEl.textContent = descricoes[modoJogoEl.value] || '';
         });
 
-        // Atualizar valores dos sliders
-        function atualizarSliders() {
-            const maxJogadores = document.getElementById("max-jogadores");
-            const numPalavras = document.getElementById("num-palavras");
+        // Criar sala
+        document.getElementById('btnCriar').addEventListener('click', () => {
+          const nome = document.getElementById('nomeCriador').value.trim();
+          const num_palavras = parseInt(document.getElementById('numPalavras').value, 10) || 5;
+          const max_jogadores = parseInt(document.getElementById('maxJogadores').value, 10) || 10;
+          const modo = document.getElementById('modoJogo').value;
+          if (!nome) { alert('Informe seu nome'); return; }
 
-            document.getElementById("max-jogadores-value").textContent = maxJogadores.value;
-            document.getElementById("num-palavras-value").textContent = numPalavras.value;
-        }
-
-        // Event listeners
-        document.getElementById("nome-input").addEventListener("keypress", function (e) {
-            if (e.key === "Enter") {
-                mostrarConfiguracoes();
-            }
+          const player_id = ensurePlayerId();
+          socket.emit('criar_sala', { nome, num_palavras, max_jogadores, modo, player_id });
         });
 
-        document.getElementById("codigo-input").addEventListener("keypress", function (e) {
-            if (e.key === "Enter") {
-                entrarSala();
-            }
+        socket.on('sala_criada', (data) => {
+          const codigo = data.codigo;
+          const nome = data.nome;
+          window.location.href = `/sala/${codigo}?nome=${encodeURIComponent(nome)}`;
         });
 
-        // Converter código para maiúsculo automaticamente
-        document.getElementById("codigo-input").addEventListener("input", function (e) {
-            e.target.value = e.target.value.toUpperCase();
+        socket.on('erro', (e) => alert(e.msg || 'Erro'));
+
+        // Entrar na sala
+        document.getElementById('btnEntrar').addEventListener('click', () => {
+          const nome = document.getElementById('nomeJogador').value.trim();
+          const sala = document.getElementById('codigoSala').value.trim().toUpperCase();
+          if (!nome || !sala) { alert('Informe nome e código'); return; }
+          const player_id = ensurePlayerId();
+          socket.emit('entrar_na_sala', { nome, sala, player_id });
         });
 
-        // Atualizar valores dos sliders
-        document.getElementById("max-jogadores").addEventListener("input", atualizarSliders);
-        document.getElementById("num-palavras").addEventListener("input", atualizarSliders);
-
-        // Inicializar valores dos sliders
-        atualizarSliders();
-
-        // Função para alterar o tema (aplica no <html> e não sobrescreve outras classes)
-        function alterarTema(tema) {
-            const root = document.documentElement;
-            root.className = root.className
-                .split(' ')
-                .filter(c => !c.startsWith('theme-'))
-                .join(' ')
-                .trim();
-            root.classList.add(tema);
-            localStorage.setItem('tema', tema);
-            mostrarToast(`Tema alterado para: ${tema.replace('theme-', '').charAt(0).toUpperCase() + tema.replace('theme-', '').slice(1)}`, 'success');
-        }
-
-        // Aplicar tema salvo imediatamente no <html>
-        (function () {
-            const temaSalvo = localStorage.getItem('tema') || 'theme-dark';
-            const root = document.documentElement;
-            root.className = root.className
-                .split(' ')
-                .filter(c => !c.startsWith('theme-'))
-                .join(' ')
-                .trim();
-            root.classList.add(temaSalvo);
-        })();
-
-        // Função para abrir/fechar o dropdown de temas
-        function toggleThemeMenu() {
-            const menu = document.getElementById("theme-menu");
-            menu.classList.toggle("hidden");
-        }
-
-        // (Opcional) Fecha o menu se clicar fora dele
-        document.addEventListener("click", function (e) {
-            const themeBtn = document.getElementById("theme-btn");
-            const themeMenu = document.getElementById("theme-menu");
-            if (!themeBtn.contains(e.target) && !themeMenu.contains(e.target)) {
-                themeMenu.classList.add("hidden");
-            }
+        socket.on('jogador_entrou', (data) => {
+          if (data && data.codigo) return; // ignore on home
         });
-
     </script>
 </body>
 
