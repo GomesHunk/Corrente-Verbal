@@ -1,96 +1,72 @@
-# 🎮 Jogo das 5 Palavras
+# 🎮 Corrente Verbal
 
-Um jogo multiplayer online onde os jogadores devem adivinhar as palavras uns dos outros!
+Um jogo multiplayer online onde os jogadores devem adivinhar as palavras uns dos outros.
 
-## 🚀 Como fazer Deploy no Render
+## 🚀 Deploy no Render (passo a passo)
 
-### Passo 1: Preparar o Repositório
+1) Preparar o repositório
+- Suba este projeto para um repositório público no GitHub.
 
-1. **Criar conta no GitHub** (se não tiver):
-   - Acesse [github.com](https://github.com)
-   - Clique em "Sign up" e crie sua conta
+2) Criar o serviço
+- Entre em https://render.com e conecte sua conta do GitHub.
+- Clique em New → Web Service.
+- Selecione o seu repositório.
+- Configure:
+  - Name: corrente-verbal (ou outro)
+  - Environment: Python 3
+  - Build Command: `pip install -r requirements.txt`
+  - Start Command: `gunicorn -c gunicorn.conf.py app:app`
+  - Plan: Free (ou superior)
+- Crie o serviço e aguarde o deploy.
 
-2. **Criar um novo repositório**:
-   - Clique no botão "+" no canto superior direito
-   - Selecione "New repository"
-   - Nome: `jogo-5-palavras` (ou outro nome de sua escolha)
-   - Marque como "Public"
-   - Clique em "Create repository"
+3) Variáveis e saúde
+- Já configurado em `render.yaml`:
+  - healthCheckPath: `/health`
+  - WEB_CONCURRENCY: `1` (plano gratuito)
+  - RENDER: `1` (ativa modo produção no app)
+  - PYTHON_VERSION: `3.9.16`
 
-3. **Fazer upload dos arquivos**:
-   - Na página do repositório criado, clique em "uploading an existing file"
-   - Arraste todos os arquivos da pasta "Jogo das 5 Palavras" para o GitHub
-   - Escreva uma mensagem como "Initial commit"
-   - Clique em "Commit changes"
+4) Testar
+- Acesse a URL que o Render fornecer (ex.: https://corrente-verbal.onrender.com).
+- Crie uma sala, entre em outra aba como segundo jogador e jogue.
 
-### Passo 2: Deploy no Render
+## 📦 Tecnologias
+- Backend: Flask + Flask-SocketIO (WebSockets via gevent)
+- Servidor: Gunicorn + Gevent WebSocket Worker
+- Frontend: HTML, JavaScript, Tailwind CSS (via CDN) e CSS próprio (`static/style.css`)
+- Healthcheck: `/health` e `/health/detailed`
 
-1. **Criar conta no Render**:
-   - Acesse [render.com](https://render.com)
-   - Clique em "Get Started for Free"
-   - Conecte com sua conta do GitHub
+## 🧩 Tailwind CSS
+- Este projeto usa o CDN do Tailwind — não é necessário instalar pacotes Node nem alterar `requirements.txt`.
+- Se preferir performance máxima em produção, faça build com Node (Tailwind + PostCSS) e referencie o CSS compilado em vez do CDN.
 
-2. **Criar novo Web Service**:
-   - No dashboard do Render, clique em "New +"
-   - Selecione "Web Service"
-   - Conecte seu repositório GitHub
-   - Selecione o repositório `jogo-5-palavras`
+## 🕹️ Como Jogar (instruções iniciais)
+1. Um jogador cria a sala e compartilha o código com os amigos.
+2. Todos entram na sala com seus nomes.
+3. O criador marca o modo de jogo (quando disponível) e aguarda os jogadores marcarem-se como prontos.
+4. Quando todos (exceto o criador) estiverem prontos, o criador clica em “Iniciar Partida”.
 
-3. **Configurar o serviço**:
-   - **Name**: `jogo-5-palavras` (ou outro nome)
-   - **Environment**: `Python 3`
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `gunicorn -c gunicorn.conf.py app:app`
-   - **Plan**: Selecione "Free" (gratuito)
+5. Cada jogador define suas palavras secretas.
+6. O jogo começa com turnos: você tenta adivinhar as palavras do seu alvo na ordem (1, depois 2, etc.).
+7. A cada erro, mais uma letra da palavra atual é revelada como dica.
+8. Vence quem descobrir todas as palavras do seu alvo primeiro. O gabarito pode ser exibido ao final.
 
-4. **Deploy**:
-   - Clique em "Create Web Service"
-   - Aguarde o deploy (pode levar alguns minutos)
-   - Quando terminar, você receberá uma URL como: `https://jogo-5-palavras.onrender.com`
+Dicas:
+- Use o chat para interagir com os outros jogadores.
+- Reações por emoji estão disponíveis durante a partida.
+- O criador pode transferir a liderança para outro jogador, se necessário.
+- Se a conexão cair, o jogo tentará reconectar automaticamente.
 
-### Passo 3: Testar o Jogo
+## ⚙️ Ambiente de produção
+- O `gunicorn.conf.py` já está preparado para WebSockets (GeventWebSocketWorker).
+- O `app.py` habilita async_mode gevent quando a variável `RENDER` está definida.
+- Mantenha apenas 1 worker no plano gratuito para evitar problemas com sessões em memória.
 
-1. Acesse a URL fornecida pelo Render
-2. Crie uma sala de jogo
-3. Compartilhe o código da sala com seus amigos
-4. Divirtam-se jogando!
+## ❗ Solução de problemas
+- Erro de WebSocket: confirme que o worker do Gunicorn é `geventwebsocket.gunicorn.workers.GeventWebSocketWorker`.
+- Reconexões constantes: verifique logs e o healthcheck `/health`.
+- Página não abre: veja os logs do Render na aba Logs e confirme `requirements.txt` na raiz.
+- Lerdeza no primeiro acesso: o plano Free hiberna. Aguarde alguns segundos.
 
-## 🎯 Como Jogar
-
-1. **Criar/Entrar na Sala**: Um jogador cria a sala e compartilha o código
-2. **Definir Palavras**: Cada jogador define suas 5 palavras secretas
-3. **Adivinhar**: Os jogadores se revezam tentando adivinhar as palavras dos adversários
-4. **Dicas Dinâmicas**: A cada erro, mais letras da palavra são reveladas
-5. **Vitória**: Ganha quem descobrir todas as palavras do adversário primeiro!
-
-## 📱 Recursos
-
-- ✅ Multiplayer em tempo real
-- ✅ Chat integrado
-- ✅ Interface responsiva (funciona no celular)
-- ✅ Dicas dinâmicas
-- ✅ Histórico de tentativas
-- ✅ Palavra de referência
-- ✅ Design moderno e escuro
-
-## 🔧 Tecnologias Utilizadas
-
-- **Backend**: Python, Flask, Flask-SocketIO
-- **Frontend**: HTML5, CSS3, JavaScript
-- **Deploy**: Render.com
-- **Comunicação**: WebSockets (Socket.IO)
-
-## 📞 Suporte
-
-Se tiver problemas com o deploy, verifique:
-
-1. **Arquivos necessários**: Certifique-se de que todos os arquivos estão no GitHub
-2. **requirements.txt**: Deve estar na raiz do projeto
-3. **Logs do Render**: Verifique os logs na aba "Logs" do seu serviço
-4. **Porta**: O Render define automaticamente a porta via variável `$PORT`
-
-## 🎉 Pronto!
-
-Agora você pode jogar com seus amigos de qualquer lugar do mundo! 🌍
-
-Compartilhe a URL do seu jogo e divirtam-se! 🎮
+## 📄 Licença
+Uso livre para fins educacionais e pessoais. Ajuste conforme sua necessidade.

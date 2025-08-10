@@ -5,186 +5,194 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Corrente Verbal</title>
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Configurar Tailwind para dark mode via classe (compatível com seus temas)
+      window.tailwind = window.tailwind || {};
+      tailwind.config = { darkMode: 'class' };
+    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
 </head>
 
-<body>
-    <div class="container">
-        <div class="card">
-            <h1>Corrente Verbal</h1>
-            <p class="text-center text-muted mb-4">Desafie seus amigos em uma batalha de palavras!</p>
+<body class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-black text-slate-100">
+    <div class="container max-w-3xl mx-auto p-6 md:p-8">
+        <div class="card rounded-2xl border border-white/10 bg-white/5 backdrop-blur shadow-2xl shadow-black/40">
+            <div class="p-6 md:p-8">
+                <h1 class="text-3xl md:text-4xl font-bold tracking-tight">Corrente Verbal</h1>
+                <p class="text-center text-slate-300 mb-6 md:mb-8">Desafie seus amigos em uma batalha de palavras!</p>
 
-            <!-- Como Jogar -->
-            <div class="how-to-play">
-                <h2>
-                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    Como Jogar
-                </h2>
-                <ul class="steps">
-                    <li class="step">Cada jogador define suas palavras secretas</li>
-                    <li class="step">A primeira palavra é mostrada completa, as outras apenas a inicial</li>
-                    <li class="step">Tente adivinhar sequencialmente: palavra 1, depois 2, depois 3...</li>
-                    <li class="step">Ao errar, ganha uma letra extra da palavra atual</li>
-                    <li class="step">Vence quem descobrir todas as palavras do adversário primeiro!</li>
-                </ul>
-            </div>
-
-            <!-- Formulário -->
-            <div class="form-section">
-                <div class="input-group">
-                    <label for="nome-input">
+                <!-- Como Jogar -->
+                <div class="how-to-play">
+                    <h2 class="text-2xl font-semibold mb-3 flex items-center gap-2">
                         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
-                        Seu nome:
-                    </label>
-                    <div class="name-avatar-container">
-                        <input type="text" id="nome-input" placeholder="Digite seu nome" maxlength="20" autocomplete="off">
-                        <div class="avatar-selector">
-                            <div class="avatar-current" id="avatar-current" onclick="toggleAvatarMenu()">
-                                <span class="avatar-emoji">👤</span>
-                            </div>
-                            <div class="avatar-dropdown hidden" id="avatar-dropdown">
-                                <div class="avatar-option" onclick="selecionarAvatar('👤')" data-avatar="👤">👤</div>
-                                <div class="avatar-option" onclick="selecionarAvatar('😊')" data-avatar="😊">😊</div>
-                                <div class="avatar-option" onclick="selecionarAvatar('😎')" data-avatar="😎">😎</div>
-                                <div class="avatar-option" onclick="selecionarAvatar('🚀')" data-avatar="🚀">🚀</div>
-                                <div class="avatar-option" onclick="selecionarAvatar('⚡')" data-avatar="⚡">⚡</div>
-                                <div class="avatar-option" onclick="selecionarAvatar('🎮')" data-avatar="🎮">🎮</div>
-                                <div class="avatar-option" onclick="selecionarAvatar('🔥')" data-avatar="🔥">🔥</div>
-                                <div class="avatar-option" onclick="selecionarAvatar('💎')" data-avatar="💎">💎</div>
-                                <div class="avatar-option" onclick="selecionarAvatar('🌟')" data-avatar="🌟">🌟</div>
-                                <div class="avatar-option" onclick="selecionarAvatar('🎯')" data-avatar="🎯">🎯</div>
-                                <div class="avatar-option" onclick="selecionarAvatar('🏆')" data-avatar="🏆">🏆</div>
-                                <div class="avatar-option" onclick="selecionarAvatar('🎪')" data-avatar="🎪">🎪</div>
-                            </div>
-                        </div>
-                    </div>
+                        Como Jogar
+                    </h2>
+                    <ul class="steps space-y-2 text-slate-200">
+                        <li class="step">Cada jogador define suas palavras secretas</li>
+                        <li class="step">A primeira palavra é mostrada completa, as outras apenas a inicial</li>
+                        <li class="step">Tente adivinhar sequencialmente: palavra 1, depois 2, depois 3...</li>
+                        <li class="step">Ao errar, ganha uma letra extra da palavra atual</li>
+                        <li class="step">Vence quem descobrir todas as palavras do adversário primeiro!</li>
+                    </ul>
                 </div>
 
-                <!-- Configurações da Sala (inicialmente oculta) -->
-                <div id="config-section" class="hidden">
-                    <h3>Configurações da Sala</h3>
-                    <div class="config-section">
-                        <div class="config-item">
-                            <label for="max-jogadores">
-                                <span>Máximo de jogadores:</span>
-                                <small class="config-help">Suporte de 2 até 10 jogadores simultâneos</small>
-                            </label>
-                            <div class="range-input">
-                                <input type="range" id="max-jogadores" min="2" max="10" value="4">
-                                <span class="range-value" id="max-jogadores-value">4</span>
-                                <span class="range-label">jogadores</span>
-                            </div>
-                        </div>
-                        <div class="config-item">
-                            <label for="num-palavras">
-                                <span>Número de palavras:</span>
-                                <small class="config-help">Quantas palavras cada jogador deve adivinhar</small>
-                            </label>
-                            <div class="range-input">
-                                <input type="range" id="num-palavras" min="4" max="8" value="5">
-                                <span class="range-value" id="num-palavras-value">5</span>
-                                <span class="range-label">palavras</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="main-actions">
-                    <button class="btn btn-primary btn-large" onclick="mostrarConfiguracoes()">
-                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        Criar Sala
-                    </button>
-                    <button class="btn btn-secondary btn-large" onclick="mostrarEntrarSala()">
-                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013 3v1">
-                            </path>
-                        </svg>
-                        Entrar em Sala
-                    </button>
-                    <div class="theme-selector-wrapper">
-                        <button class="btn btn-secondary btn-large" onclick="toggleThemeMenu()" id="theme-btn">
-                            🎨 Tema
-                        </button>
-                        <div class="theme-menu-dropdown hidden" id="theme-menu">
-                            <div class="theme-thumb" onclick="alterarTema('theme-light')" title="Claro">
-                                <img src="/static/themes/sun.svg" alt="Claro" />
-                            </div>
-                            <div class="theme-thumb" onclick="alterarTema('theme-dark')" title="Escuro">
-                                <img src="/static/themes/moon.svg" alt="Escuro" />
-                            </div>
-                            <div class="theme-thumb" onclick="alterarTema('theme-matrix')" title="Matrix">
-                                <img src="/static/themes/matrix.svg" alt="Matrix" />
-                            </div>
-                            <div class="theme-thumb" onclick="alterarTema('theme-starwars')" title="Star Wars">
-                                <img src="/static/themes/starwars.svg" alt="Star Wars" />
-                            </div>
-                            <div class="theme-thumb" onclick="alterarTema('theme-strangerthings')" title="Stranger Things">
-                                <img src="/static/themes/strangerthings.svg" alt="Stranger Things" />
-                            </div>
-                            <div class="theme-thumb" onclick="alterarTema('theme-flamengo')" title="Flamengo">
-                                <img src="/static/themes/flamengo.svg" alt="Flamengo" />
-                            </div>
-                            <div class="theme-thumb" onclick="alterarTema('theme-botafogo')" title="Botafogo">
-                                <img src="/static/themes/botafogo.svg" alt="Botafogo" />
-                            </div>
-                            <div class="theme-thumb" onclick="alterarTema('theme-vasco')" title="Vasco">
-                                <img src="/static/themes/vasco.svg" alt="Vasco" />
-                            </div>
-                            <div class="theme-thumb" onclick="alterarTema('theme-fluminense')" title="Fluminense">
-                                <img src="/static/themes/fluminense.svg" alt="Fluminense" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Botão de confirmar criação (inicialmente oculto) -->
-                <div id="criar-sala-final" class="hidden">
-                    <button class="btn btn-success btn-large" onclick="criarSala()">
-                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        Confirmar e Criar Sala
-                    </button>
-                </div>
-
-                <!-- Seção para entrar em sala (inicialmente oculta) -->
-                <div id="entrar-sala-section" class="hidden">
+                <!-- Formulário -->
+                <div class="form-section mt-6">
                     <div class="input-group">
-                        <label for="codigo-input">
+                        <label for="nome-input">
                             <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
+                                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                            </svg>
+                            Seu nome:
+                        </label>
+                        <div class="name-avatar-container">
+                            <input type="text" id="nome-input" placeholder="Digite seu nome" maxlength="20" autocomplete="off">
+                            <div class="avatar-selector">
+                                <div class="avatar-current" id="avatar-current" onclick="toggleAvatarMenu()">
+                                    <span class="avatar-emoji">👤</span>
+                                </div>
+                                <div class="avatar-dropdown hidden" id="avatar-dropdown">
+                                    <div class="avatar-option" onclick="selecionarAvatar('👤')" data-avatar="👤">👤</div>
+                                    <div class="avatar-option" onclick="selecionarAvatar('😊')" data-avatar="😊">😊</div>
+                                    <div class="avatar-option" onclick="selecionarAvatar('😎')" data-avatar="😎">😎</div>
+                                    <div class="avatar-option" onclick="selecionarAvatar('🚀')" data-avatar="🚀">🚀</div>
+                                    <div class="avatar-option" onclick="selecionarAvatar('⚡')" data-avatar="⚡">⚡</div>
+                                    <div class="avatar-option" onclick="selecionarAvatar('🎮')" data-avatar="🎮">🎮</div>
+                                    <div class="avatar-option" onclick="selecionarAvatar('🔥')" data-avatar="🔥">🔥</div>
+                                    <div class="avatar-option" onclick="selecionarAvatar('💎')" data-avatar="💎">💎</div>
+                                    <div class="avatar-option" onclick="selecionarAvatar('🌟')" data-avatar="🌟">🌟</div>
+                                    <div class="avatar-option" onclick="selecionarAvatar('🎯')" data-avatar="🎯">🎯</div>
+                                    <div class="avatar-option" onclick="selecionarAvatar('🏆')" data-avatar="🏆">🏆</div>
+                                    <div class="avatar-option" onclick="selecionarAvatar('🎪')" data-avatar="🎪">🎪</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Configurações da Sala (inicialmente oculta) -->
+                    <div id="config-section" class="hidden">
+                        <h3 class="text-xl font-semibold mb-4">Configurações da Sala</h3>
+                        <div class="config-section space-y-4">
+                            <div class="config-item">
+                                <label for="max-jogadores" class="flex flex-col">
+                                    <span class="font-medium">Máximo de jogadores:</span>
+                                    <small class="config-help text-slate-400">Suporte de 2 até 10 jogadores simultâneos</small>
+                                </label>
+                                <div class="range-input flex items-center gap-2">
+                                    <input type="range" id="max-jogadores" min="2" max="10" value="4"
+                                        class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                                    <span class="range-value" id="max-jogadores-value">4</span>
+                                    <span class="range-label text-slate-300">jogadores</span>
+                                </div>
+                            </div>
+                            <div class="config-item">
+                                <label for="num-palavras" class="flex flex-col">
+                                    <span class="font-medium">Número de palavras:</span>
+                                    <small class="config-help text-slate-400">Quantas palavras cada jogador deve adivinhar</small>
+                                </label>
+                                <div class="range-input flex items-center gap-2">
+                                    <input type="range" id="num-palavras" min="4" max="8" value="5"
+                                        class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                                    <span class="range-value" id="num-palavras-value">5</span>
+                                    <span class="range-label text-slate-300">palavras</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="main-actions flex flex-col md:flex-row md:gap-4">
+                        <button class="btn btn-primary btn-large" onclick="mostrarConfiguracoes()">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            Criar Sala
+                        </button>
+                        <button class="btn btn-secondary btn-large" onclick="mostrarEntrarSala()">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013 3v1">
                                 </path>
                             </svg>
-                            Código da sala:
-                        </label>
-                        <input type="text" id="codigo-input" placeholder="Digite o código da sala" maxlength="6"
-                            autocomplete="off">
+                            Entrar em Sala
+                        </button>
+                        <div class="theme-selector-wrapper">
+                            <button class="btn btn-secondary btn-large" onclick="toggleThemeMenu()" id="theme-btn">
+                                🎨 Tema
+                            </button>
+                            <div class="theme-menu-dropdown hidden" id="theme-menu">
+                                <div class="theme-thumb" onclick="alterarTema('theme-light')" title="Claro">
+                                    <img src="/static/themes/sun.svg" alt="Claro" />
+                                </div>
+                                <div class="theme-thumb" onclick="alterarTema('theme-dark')" title="Escuro">
+                                    <img src="/static/themes/moon.svg" alt="Escuro" />
+                                </div>
+                                <div class="theme-thumb" onclick="alterarTema('theme-matrix')" title="Matrix">
+                                    <img src="/static/themes/matrix.svg" alt="Matrix" />
+                                </div>
+                                <div class="theme-thumb" onclick="alterarTema('theme-starwars')" title="Star Wars">
+                                    <img src="/static/themes/starwars.svg" alt="Star Wars" />
+                                </div>
+                                <div class="theme-thumb" onclick="alterarTema('theme-strangerthings')" title="Stranger Things">
+                                    <img src="/static/themes/strangerthings.svg" alt="Stranger Things" />
+                                </div>
+                                <div class="theme-thumb" onclick="alterarTema('theme-flamengo')" title="Flamengo">
+                                    <img src="/static/themes/flamengo.svg" alt="Flamengo" />
+                                </div>
+                                <div class="theme-thumb" onclick="alterarTema('theme-botafogo')" title="Botafogo">
+                                    <img src="/static/themes/botafogo.svg" alt="Botafogo" />
+                                </div>
+                                <div class="theme-thumb" onclick="alterarTema('theme-vasco')" title="Vasco">
+                                    <img src="/static/themes/vasco.svg" alt="Vasco" />
+                                </div>
+                                <div class="theme-thumb" onclick="alterarTema('theme-fluminense')" title="Fluminense">
+                                    <img src="/static/themes/fluminense.svg" alt="Fluminense" />
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <button class="btn btn-success btn-large" onclick="entrarSala()">
-                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        Entrar na Sala
-                    </button>
+
+                    <!-- Botão de confirmar criação (inicialmente oculto) -->
+                    <div id="criar-sala-final" class="hidden">
+                        <button class="btn btn-success btn-large" onclick="criarSala()">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Confirmar e Criar Sala
+                        </button>
+                    </div>
+
+                    <!-- Seção para entrar em sala (inicialmente oculta) -->
+                    <div id="entrar-sala-section" class="hidden">
+                        <div class="input-group">
+                            <label for="codigo-input">
+                                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
+                                    </path>
+                                </svg>
+                                Código da sala:
+                            </label>
+                            <input type="text" id="codigo-input" placeholder="Digite o código da sala" maxlength="6"
+                                autocomplete="off">
+                        </div>
+                        <button class="btn btn-success btn-large" onclick="entrarSala()">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Entrar na Sala
+                        </button>
+                    </div>
                 </div>
             </div>
-
-
-
         </div>
     </div>
 

@@ -5,6 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jogo das 5 Palavras - Sala</title>
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      window.tailwind = window.tailwind || {}; tailwind.config = { darkMode: 'class' };
+    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
@@ -23,26 +28,22 @@
     </script>
 </head>
 
-<body>
-    <div class="game-container">
+<body class="min-h-screen bg-gradient-to-b from-slate-900 via-slate-950 to-black text-slate-100">
+    <div class="game-container max-w-7xl mx-auto p-4 md:p-6">
         <!-- Header do Jogo -->
-        <div class="game-header">
+        <div class="game-header flex items-center justify-between rounded-xl border border-white/10 bg-white/5 backdrop-blur p-3 md:p-4 shadow-lg shadow-black/30">
             <div class="game-info">
-                <h1>Corrente Verbal</h1>
-                <div class="players-info">
-                    <span class="player-name" id="meu-nome"></span>
-                    <span class="vs">vs</span>
-                    <div class="players-list" id="lista-jogadores-header">
-                        <!-- Os outros jogadores aparecerão aqui -->
-                    </div>
+                <h1 class="text-2xl md:text-3xl font-bold tracking-tight">Corrente Verbal</h1>
+                <div class="players-info flex items-center gap-3 mt-1">
+                    <span class="player-name inline-flex items-center gap-2" id="meu-nome"></span>
+                    <span class="vs text-slate-400">vs</span>
+                    <div class="players-list flex flex-wrap gap-2" id="lista-jogadores-header"></div>
                 </div>
             </div>
-            <div class="game-controls">
-                <div class="theme-selector">
-                    <button class="btn btn-secondary btn-small" onclick="toggleThemeMenu()" id="theme-btn">
-                        🎨 Tema
-                    </button>
-                    <div class="theme-menu-dropdown hidden" id="theme-menu">
+            <div class="game-controls flex items-center gap-2">
+                <div class="theme-selector relative">
+                    <button class="btn btn-secondary btn-small inline-flex items-center gap-2" onclick="toggleThemeMenu()" id="theme-btn">🎨 Tema</button>
+                    <div class="theme-menu-dropdown hidden absolute right-0 mt-2 rounded-xl border border-white/10 bg-slate-800/90 p-2 shadow-xl backdrop-blur" id="theme-menu">
                         <div class="theme-thumb" onclick="alterarTema('theme-light')" title="Claro">
                             <img src="/static/themes/sun.svg" alt="Claro">
                         </div>
@@ -85,8 +86,8 @@
         </div>
 
         <!-- Indicador de Turno -->
-        <div class="turn-indicator" id="indicador-turno">
-            <div class="turn-content">
+        <div class="turn-indicator my-4 rounded-xl border border-white/10 bg-slate-800/60 p-3">
+            <div class="turn-content flex items-center gap-2">
                 <div class="turn-spinner hidden" id="spinner-turno"></div>
                 <span id="texto-turno">Aguardando jogadores...</span>
             </div>
@@ -94,8 +95,8 @@
 
         <!-- Seção: Aguardando Jogadores -->
         <div class="section" id="secao-aguardando">
-            <div class="card text-center">
-                <h2>
+            <div class="card text-center rounded-xl border border-white/10 bg-white/5 backdrop-blur p-5 shadow-xl">
+                <h2 class="text-xl md:text-2xl font-semibold flex items-center justify-center gap-2">
                     <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z">
@@ -104,12 +105,12 @@
                     Aguardando Jogadores
                 </h2>
                 <div class="waiting-spinner"></div>
-                <p id="status-sala">Conectando...</p>
+                <p id="status-sala" class="text-slate-300">Conectando...</p>
                 <!-- Lista de jogadores na sala de espera -->
-                <div id="lista-jogadores-aguardando" class="players-list" style="justify-content: center; margin-top: 1rem; flex-wrap: wrap; gap: 0.5rem;"></div>
+                <div id="lista-jogadores-aguardando" class="players-list justify-center mt-4 flex flex-wrap gap-2"></div>
                 
                 <!-- Botão para marcar-se como pronto -->
-                <div id="botao-pronto-container" style="margin: 1rem 0;">
+                <div id="botao-pronto-container" class="my-4">
                     <button class="btn btn-success btn-large" onclick="alternarPronto()" id="btn-pronto">
                         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -118,13 +119,13 @@
                         </svg>
                         Marcar como Pronto
                     </button>
-                    <p class="text-muted" style="margin-top: 0.5rem; font-size: 0.9rem;" id="status-pronto-info">
+                    <p class="text-muted mt-2 text-sm" id="status-pronto-info">
                         Marque-se como pronto quando estiver preparado para jogar
                     </p>
                 </div>
                 
                 <!-- Botão para iniciar partida (apenas para o criador) -->
-                <div id="botao-iniciar-container" class="hidden" style="margin: 1.5rem 0;">
+                <div id="botao-iniciar-container" class="hidden my-6">
                     <button class="btn btn-primary btn-large" onclick="iniciarPartida()" id="btn-iniciar-partida" disabled>
                         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -133,30 +134,35 @@
                         </svg>
                         Iniciar Partida
                     </button>
-                    <p class="text-muted" style="margin-top: 0.5rem; font-size: 0.9rem;" id="iniciar-partida-info">
+                    <p class="text-muted mt-2 text-sm" id="iniciar-partida-info">
                         Aguardando todos os jogadores ficarem prontos
                     </p>
                 </div>
                 
-                <div class="room-code">
-                    <span class="text-muted">Código da sala:</span>
+                <div class="room-code flex items-center justify-center gap-2">
+                    <span class="text-slate-400">Código da sala:</span>
                     <div class="code-display" id="codigo-atual"></div>
-                    <button class="copy-btn" onclick="copiarCodigo()" title="Copiar código">
-                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z">
-                            </path>
-                        </svg>
-                    </button>
+                    <button class="copy-btn" onclick="copiarCodigo()" title="Copiar código">Copiar</button>
                 </div>
                 <div id="config-info" class="text-muted"></div>
+                <!-- Seletor de modo (apenas criador vê) -->
+                <div id="container-modos" class="hidden mt-3 flex items-center gap-2 justify-center flex-wrap">
+                    <label for="select-modo" class="text-muted">Modo de jogo:</label>
+                    <select id="select-modo" class="form-input max-w-xs min-h-[36px]">
+                        <option value="classico">Clássico</option>
+                        <option value="cooperativo">Cooperativo</option>
+                        <option value="duelo">Duelo (1v1)</option>
+                        <option value="relampago">Relâmpago</option>
+                    </select>
+                    <span id="descricao-modo" class="text-muted text-sm"></span>
+                </div>
             </div>
         </div>
 
         <!-- Seção: Definir Palavras -->
         <div class="section hidden" id="secao-palavras">
-            <div class="card">
-                <h2>
+            <div class="card rounded-xl border border-white/10 bg-white/5 backdrop-blur p-5 shadow-xl">
+                <h2 class="text-xl md:text-2xl font-semibold flex items-center gap-2">
                     <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z">
@@ -171,11 +177,11 @@
                     Aguardando pelo menos 2 jogadores para iniciar o jogo...
                 </div>
 
-                <div class="words-input-container" id="container-palavras">
+                <div class="words-input-container grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3" id="container-palavras">
                     <!-- Inputs serão gerados dinamicamente -->
                 </div>
 
-                <button class="btn btn-success btn-large" onclick="enviarPalavras()" id="btn-enviar-palavras">
+                <button class="btn btn-success btn-large mt-3" onclick="enviarPalavras()" id="btn-enviar-palavras">
                     <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -187,10 +193,10 @@
 
         <!-- Seção: Jogo -->
         <div class="section hidden" id="secao-jogo">
-            <div class="game-board-new">
+            <div class="game-board-new grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <!-- Coluna 1: Adivinhação / Espelho -->
-                <div class="guess-panel">
-                    <h3 id="titulo-adivinhacao">
+                <div class="guess-panel rounded-xl border border-white/10 bg-white/5 backdrop-blur p-4">
+                    <h3 id="titulo-adivinhacao" class="text-lg font-semibold flex items-center gap-2">
                         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
@@ -200,7 +206,7 @@
                         <span id="texto-titulo-adivinhacao">Sua Vez de Adivinhar</span>
                     </h3>
 
-                    <div id="minha-vez" class="guess-controls">
+                    <div id="minha-vez" class="guess-controls mt-2">
                         <div class="current-word-display">
                             <div class="reference-word" id="palavra-referencia" style="display: none;">
                                 <span class="reference-label">Palavra de Referência:</span>
@@ -210,22 +216,15 @@
                             <div class="word-progress" id="progresso-palavra">Palavra 1 de 5</div>
                         </div>
 
-                        <div class="guess-input-group">
-                            <input type="text" id="input-tentativa" placeholder="Digite sua tentativa..."
-                                autocomplete="off">
-                            <button class="btn btn-primary" onclick="tentarAdivinhar()">
-                                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-                                </svg>
-                                Tentar
-                            </button>
+                        <div class="guess-input-group flex items-center gap-2 mt-3">
+                            <input type="text" id="input-tentativa" placeholder="Digite sua tentativa..." autocomplete="off" class="flex-1 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <button class="btn btn-primary">Tentar</button>
                         </div>
                     </div>
 
                     <!-- Espelho do Jogador Ativo -->
-                    <div id="espelho-jogador" class="mirror-view hidden">
-                        <h3>
+                    <div id="espelho-jogador" class="mirror-view hidden mt-4">
+                        <h3 class="flex items-center gap-2">
                             <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -234,7 +233,6 @@
                         </h3>
 
                         <p class="text-muted mb-2">Aguarde sua vez de jogar.</p>
-
 
                         <div class="current-word-display">
                             <div class="reference-word" id="mirror-palavra-referencia" style="display: none;">
@@ -245,23 +243,16 @@
                             <div class="word-progress" id="mirror-progresso-palavra">Palavra 1 de 5</div>
                         </div>
 
-                        <div class="guess-input-group">
-                            <input type="text" id="mirror-input-tentativa" placeholder="Seu palpite silencioso..."
-                                autocomplete="off" disabled>
-                            <button class="btn btn-secondary" disabled>
-                                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                </svg>
-                                Observando
-                            </button>
+                        <div class="guess-input-group mt-2">
+                            <input type="text" id="mirror-input-tentativa" placeholder="Seu palpite silencioso..." autocomplete="off" disabled class="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2">
+                            <button class="btn btn-secondary mt-2" disabled>Observando</button>
                         </div>
                     </div>
 
                     <!-- Botões de Emoji -->
-                    <div class="emoji-reactions">
-                        <h4>🎭 Reações</h4>
-                        <div class="emoji-buttons">
+                    <div class="emoji-reactions mt-4">
+                        <h4 class="font-semibold">🎭 Reações</h4>
+                        <div class="emoji-buttons flex flex-wrap gap-2 mt-2">
                             <button class="emoji-btn" onclick="enviarEmoji('👍')" title="Gostei">👍</button>
                             <button class="emoji-btn" onclick="enviarEmoji('👎')" title="Não gostei">👎</button>
                             <button class="emoji-btn" onclick="enviarEmoji('🤔')" title="Pensativo">🤔</button>
@@ -275,8 +266,8 @@
                 </div>
 
                 <!-- Coluna 2: Suas Palavras -->
-                <div class="my-words-panel">
-                    <h4>
+                <div class="my-words-panel rounded-xl border border-white/10 bg-white/5 backdrop-blur p-4">
+                    <h4 class="flex items-center gap-2 font-semibold">
                         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
@@ -284,15 +275,14 @@
                         </svg>
                         Suas Palavras (Alvo: <span id="meu-alvo">---</span>)
                     </h4>
-                    <div class="words-grid" id="minhas-palavras-grid">
+                    <div class="words-grid mt-2" id="minhas-palavras-grid">
                         <!-- Palavras serão geradas dinamicamente -->
                     </div>
                 </div>
 
                 <!-- Coluna 3: Todos os Jogadores -->
-                <div class="all-players-panel">
-
-                    <h4>
+                <div class="all-players-panel rounded-xl border border-white/10 bg-white/5 backdrop-blur p-4">
+                    <h4 class="flex items-center gap-2 font-semibold">
                         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z">
@@ -300,29 +290,29 @@
                         </svg>
                         👥 Todos os Jogadores
                     </h4>
-                    <div class="all-players-scroll" id="todos-jogadores-container">
+                    <div class="all-players-scroll mt-2" id="todos-jogadores-container">
                         <!-- Jogadores serão gerados dinamicamente -->
                     </div>
                 </div>
             </div>
 
             <!-- Histórico -->
-            <div class="history-panel">
-                <h3>
+            <div class="history-panel mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur p-4">
+                <h3 class="font-semibold flex items-center gap-2">
                     <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     Histórico de Tentativas
                 </h3>
-                <div class="history-list" id="lista-historico">
+                <div class="history-list mt-2" id="lista-historico">
                     <div class="no-history">Nenhuma tentativa ainda</div>
                 </div>
             </div>
 
             <!-- Chat -->
-            <div class="chat-panel">
-                <div class="chat-header">
+            <div class="chat-panel mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur p-4">
+                <div class="chat-header flex items-center gap-2 font-semibold">
                     <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z">
@@ -330,18 +320,12 @@
                     </svg>
                     Chat
                 </div>
-                <div class="chat-messages" id="mensagens-chat">
+                <div class="chat-messages mt-2" id="mensagens-chat">
                     <!-- Mensagens serão adicionadas dinamicamente -->
                 </div>
-                <div class="chat-input">
-                    <input type="text" id="input-chat" placeholder="Digite uma mensagem..." maxlength="200"
-                        autocomplete="off">
-                    <button class="btn btn-primary btn-small" onclick="enviarMensagem()">
-                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-                        </svg>
-                    </button>
+                <div class="chat-input mt-2 flex items-center gap-2">
+                    <input type="text" id="input-chat" placeholder="Digite uma mensagem..." maxlength="200" autocomplete="off" class="flex-1 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <button class="btn btn-primary btn-small">Enviar</button>
                 </div>
             </div>
         </div>
@@ -349,14 +333,14 @@
 
     <!-- Modal de Fim de Jogo -->
     <div id="modal-fim-jogo" class="modal hidden">
-        <div class="modal-content">
+        <div class="modal-content rounded-2xl border border-white/10 bg-slate-900/90 backdrop-blur">
             <div class="modal-header">
-                <h2 id="titulo-fim-jogo">Fim de Jogo!</h2>
+                <h2 id="titulo-fim-jogo" class="text-2xl font-bold"></h2>
             </div>
             <div class="modal-body">
-                <p id="mensagem-fim-jogo"></p>
+                <p id="mensagem-fim-jogo" class="text-lg"></p>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer flex justify-end gap-2">
                 <button class="btn btn-primary" onclick="voltarInicio()">Voltar ao Início</button>
                 <button class="btn btn-secondary" onclick="fecharModalFim()">Continuar Conversando</button>
             </div>
@@ -379,18 +363,30 @@
         let codigoSala = '';
         let numPalavras = 5;
         let estadoJogo = null;
-        let totalJogadores = 0;   // adicionado
-        let maxJogadores = 0;     // adicionado
+        let totalJogadores = 0;
+        let maxJogadores = 0;
+        let playerId = null; // para reconexão estável
 
         // Inicialização
         document.addEventListener('DOMContentLoaded', function () {
-            // Obter parâmetros da URL
             const urlParams = new URLSearchParams(window.location.search);
             const pathParts = window.location.pathname.split('/');
 
             meuNome = urlParams.get('jogador') || '';
             codigoSala = pathParts[pathParts.length - 1] || '';
             numPalavras = parseInt(urlParams.get('num_palavras')) || 5;
+
+            // Gerar/recuperar playerId para reconexão
+            try {
+                playerId = localStorage.getItem('cv_player_id');
+                if (!playerId) {
+                    if (window.crypto?.randomUUID) playerId = crypto.randomUUID();
+                    else playerId = 'pid_' + Math.random().toString(36).slice(2) + Date.now();
+                    localStorage.setItem('cv_player_id', playerId);
+                }
+            } catch (_) {
+                playerId = 'pid_' + Math.random().toString(36).slice(2) + Date.now();
+            }
 
             if (!meuNome || !codigoSala) {
                 mostrarToast('Parâmetros inválidos. Redirecionando...', 'error');
@@ -403,52 +399,122 @@
             document.getElementById('num-palavras-texto').textContent = numPalavras;
 
             inicializarSocket();
-            // gerarInputsPalavras() será chamada quando necessário, não aqui
+
+            // Enter para enviar tentativa/chat
+            const inputTentativa = document.getElementById('input-tentativa');
+            const inputChat = document.getElementById('input-chat');
+            inputTentativa?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); tentarAdivinhar(); } });
+            inputChat?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); enviarMensagem(); } });
         });
 
         function inicializarSocket() {
-            // Configuração mais conservadora para produção
             let reconnectAttempts = 0;
             const maxReconnectAttempts = 3;
             
             socket = io({
                 transports: ['polling', 'websocket'],
                 upgrade: true,
-                timeout: 30000,          // 30 segundos
+                timeout: 30000,
                 reconnection: true,
-                reconnectionDelay: 2000, // 2 segundos entre tentativas
-                reconnectionAttempts: 3, // Apenas 3 tentativas
+                reconnectionDelay: 2000,
+                reconnectionAttempts: 3,
                 maxReconnectionAttempts: 3,
-                forceNew: false
+                forceNew: false,
+                auth: { sala: codigoSala, nome: meuNome, player_id: playerId }
             });
 
             socket.on('connect', function () {
                 meuSid = socket.id;
-                console.log('[SOCKET] Conectado ao servidor, meuSid:', meuSid);
-                reconnectAttempts = 0; // Reset contador
-
-                // A sala já foi criada na página inicial.
-                // Ao carregar esta página, o objetivo é sempre ENTRAR na sala.
-                console.log(`[DEBUG] Tentando entrar na sala: ${codigoSala} com nome: ${meuNome}`);
-                socket.emit('entrar_na_sala', {
-                    sala: codigoSala,
-                    nome: meuNome
-                });
-                
-                // Gerar inputs após um pequeno delay para garantir que tudo esteja pronto
-                setTimeout(() => {
-                    gerarInputsPalavras();
-                }, 100);
-                
-                // Configurar um timeout caso não receba resposta em 15 segundos
+                salaEncontrada = false;
+                socket.emit('entrar_na_sala', { sala: codigoSala, nome: meuNome, player_id: playerId });
+                setTimeout(() => { gerarInputsPalavras(); }, 100);
                 setTimeout(function() {
                     if (!salaEncontrada) {
-                        mostrarToast('Não foi possível conectar à sala. Verifique o código e tente novamente.', 'error');
-                        setTimeout(function() {
-                            window.location.href = '/';
-                        }, 3000);
+                        mostrarToast('Não foi possível conectar à sala.', 'error');
+                        setTimeout(function() { window.location.href = '/'; }, 3000);
                     }
                 }, 15000);
+            });
+
+            socket.on('reconnect', function (attemptNumber) {
+                mostrarToast('Reconectado ao servidor!', 'success');
+                reconnectAttempts = 0;
+                socket.emit('entrar_na_sala', { sala: codigoSala, nome: meuNome, player_id: playerId });
+            });
+
+            // Eventos do jogo/sala
+            socket.on('sala_criada', function(data) {
+                // Criador em página da sala (fallback), ajustar estados
+                souCriador = true;
+                salaEncontrada = true;
+                mostrarSecao('secao-aguardando');
+                statusJogadores = data.jogadores_info || [];
+                const naoCriadores = (statusJogadores || []).filter(j => !j.criador);
+                const prontos = naoCriadores.filter(j => j.pronto).length;
+                atualizarBotaoIniciarPartida(naoCriadores.length, prontos, prontos === naoCriadores.length && naoCriadores.length > 0);
+            });
+
+            socket.on('jogador_entrou', function(data) {
+                salaEncontrada = true;
+                if ('sou_criador' in data) {
+                    souCriador = data.sou_criador;
+                }
+                totalJogadores = data.total;
+                maxJogadores = data.max;
+                if (data.jogadores_info) {
+                    statusJogadores = data.jogadores_info;
+                    atualizarListaJogadoresComStatus(data.jogadores_info);
+                    const naoCriadores = data.jogadores_info.filter(j => !j.criador);
+                    const prontos = naoCriadores.filter(j => j.pronto).length;
+                    atualizarBotaoIniciarPartida(naoCriadores.length, prontos, data.todos_prontos === true);
+                } else {
+                    atualizarListaJogadoresAguardando(data.jogadores || []);
+                    const naoCriadores = (data.jogadores || []).filter(n => n !== meuNome);
+                    atualizarBotaoIniciarPartida(naoCriadores.length, 0, false);
+                }
+                const configInfo = document.getElementById('config-info');
+                if (configInfo) {
+                    const modoTxt = data.modo ? ` • Modo: ${tituloModo(data.modo)}` : '';
+                    configInfo.textContent = `${data.total}/${data.max} jogadores${modoTxt}`;
+                }
+                atualizarVisibilidadeSeletorModo();
+                if (data.modo) setModoUI(data.modo);
+            });
+
+            socket.on('status_prontos_atualizado', function(data) {
+                statusJogadores = data.jogadores;
+                atualizarListaJogadoresComStatus(data.jogadores);
+                const naoCriadores = data.jogadores.filter(j => !j.criador);
+                const prontos = naoCriadores.filter(j => j.pronto).length;
+                atualizarBotaoIniciarPartida(naoCriadores.length, prontos, data.todos_prontos === true);
+                const prontosCount = data.jogadores_prontos;
+                const total = data.total_jogadores;
+                const info = document.getElementById('status-pronto-info');
+                if (info) info.textContent = `${prontosCount}/${total} jogadores prontos`;
+            });
+
+            socket.on('meu_status', function(data) {
+                souCriador = data.sou_criador;
+                meuNome = data.nome;
+                codigoSala = data.sala;
+                atualizarVisibilidadeSeletorModo();
+                if (statusJogadores && statusJogadores.length > 0) {
+                    atualizarBotoesBaseadoNoTipo(statusJogadores);
+                }
+            });
+
+            socket.on('novo_criador', function(data) {
+                mostrarToast(`Novo criador da sala: ${data.nome}`, 'info');
+                souCriador = (data.nome === meuNome);
+                atualizarBotoesBaseadoNoTipo(statusJogadores || []);
+                atualizarVisibilidadeSeletorModo();
+            });
+
+            socket.on('modo_atualizado', function(data) {
+                setModoUI(data.modo);
+                const configInfo = document.getElementById('config-info');
+                if (configInfo) configInfo.textContent = `${totalJogadores}/${maxJogadores} jogadores • Modo: ${tituloModo(data.modo)}`;
+                mostrarToast(`Modo alterado para: ${tituloModo(data.modo)}`, 'success');
             });
 
             socket.on('disconnect', function (reason) {
@@ -483,7 +549,8 @@
                 // Reentrar na sala após reconexão
                 socket.emit('entrar_na_sala', {
                     sala: codigoSala,
-                    nome: meuNome
+                    nome: meuNome,
+                    player_id: playerId
                 });
             });
 
@@ -526,14 +593,17 @@
                     const prontos = naoCriadores.filter(j => j.pronto).length;
                     atualizarBotaoIniciarPartida(naoCriadores.length, prontos, data.todos_prontos === true);
                 } else {
-                    atualizarListaJogadoresAguardando(data.jogadores);
+                    atualizarListaJogadoresAguardando(data.jogadores || []);
                     const naoCriadores = (data.jogadores || []).filter(n => n !== meuNome);
                     atualizarBotaoIniciarPartida(naoCriadores.length, 0, false);
                 }
                 const configInfo = document.getElementById('config-info');
                 if (configInfo) {
-                    configInfo.textContent = `${data.total}/${data.max} jogadores`;
+                    const modoTxt = data.modo ? ` • Modo: ${tituloModo(data.modo)}` : '';
+                    configInfo.textContent = `${data.total}/${data.max} jogadores${modoTxt}`;
                 }
+                atualizarVisibilidadeSeletorModo();
+                if (data.modo) setModoUI(data.modo);
             });
 
             // Novo evento para atualização de status de prontos
@@ -759,6 +829,123 @@
                 estadoJogo = data.estado;
                 atualizarInterfaceJogo();
             });
+        }
+
+        function atualizarBotoesBaseadoNoTipo(jogadores) {
+            const botaoProntoContainer = document.getElementById('botao-pronto-container');
+            const botaoIniciarContainer = document.getElementById('botao-iniciar-container');
+            // Confiar primeiro na flag global souCriador
+            const ehCriador = souCriador || (jogadores || []).some(j => j.nome === meuNome && j.criador);
+            if (ehCriador) {
+                botaoProntoContainer?.classList.add('hidden');
+                botaoIniciarContainer?.classList.remove('hidden');
+            } else {
+                botaoIniciarContainer?.classList.add('hidden');
+                botaoProntoContainer?.classList.remove('hidden');
+            }
+        }
+
+        function atualizarVisibilidadeSeletorModo() {
+            const box = document.getElementById('container-modos');
+            if (!box) return;
+            if (souCriador) box.classList.remove('hidden'); else box.classList.add('hidden');
+        }
+
+        function tituloModo(modo) {
+            switch (modo) {
+                case 'cooperativo': return 'Cooperativo';
+                case 'duelo': return 'Duelo (1v1)';
+                case 'relampago': return 'Relâmpago';
+                default: return 'Clássico';
+            }
+        }
+
+        function setModoUI(modo) {
+            const sel = document.getElementById('select-modo');
+            const desc = document.getElementById('descricao-modo');
+            if (sel) sel.value = modo;
+            if (desc) {
+                const map = {
+                    classico: 'Turnos padrão, todos jogam.',
+                    cooperativo: 'Todos contra o tempo, ajuda mútua.',
+                    duelo: 'Dois jogadores se alternam.',
+                    relampago: 'Turnos curtos e dinâmicos.'
+                };
+                desc.textContent = map[modo] || '';
+            }
+        }
+
+        // Wire do seletor de modo (apenas criador emite)
+        document.addEventListener('DOMContentLoaded', () => {
+            const sel = document.getElementById('select-modo');
+            sel?.addEventListener('change', () => {
+                const modo = sel.value;
+                if (!souCriador) { setModoUI(modo); return; }
+                socket.emit('selecionar_modo', { sala: codigoSala, nome: meuNome, modo });
+            });
+        });
+
+        // Adicionar botão de transferir host na lista de jogadores (onde já há expulsar)
+        function atualizarTodosJogadores() {
+            if (!estadoJogo) return;
+            const container = document.getElementById('todos-jogadores-container');
+            container.innerHTML = '';
+            const sou_criador_sid = estadoJogo.criador; // SID do criador
+            const euSouCriador = (sou_criador_sid === meuSid);
+            estadoJogo.jogadores.forEach(jogador => {
+                const playerDiv = document.createElement('div');
+                playerDiv.className = 'player-section';
+                const icone = jogador.nome === estadoJogo.jogador_da_vez ? '🎮' : '👤';
+                const status = jogador.nome === estadoJogo.jogador_da_vez ? ' (Jogando)' : '';
+                const descobertas = jogador.palavras_descobertas ? jogador.palavras_descobertas.filter(d => d).length : 0;
+                const total = estadoJogo.config.num_palavras;
+                const nomeAlvo = jogador.alvo || '---';
+
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'player-header';
+                headerDiv.innerHTML = `<h5>${icone} ${jogador.nome}${status}</h5><span class="player-progress">${descobertas}/${total}</span>`;
+                if (euSouCriador && jogador.nome !== meuNome) {
+                    const btnTransfer = document.createElement('button');
+                    btnTransfer.className = 'btn btn-sm btn-secondary';
+                    btnTransfer.title = 'Transferir liderança para este jogador';
+                    btnTransfer.textContent = '👑';
+                    btnTransfer.onclick = () => transferirHost(jogador.nome);
+                    headerDiv.appendChild(btnTransfer);
+
+                    const btnExpulsar = document.createElement('button');
+                    btnExpulsar.className = 'btn btn-sm btn-danger';
+                    btnExpulsar.title = 'Expulsar jogador';
+                    btnExpulsar.textContent = '🛑';
+                    btnExpulsar.onclick = () => expulsarJogador(jogador.nome);
+                    headerDiv.appendChild(btnExpulsar);
+                }
+                playerDiv.appendChild(headerDiv);
+                playerDiv.innerHTML += `
+                    <div class="player-target-info">
+                        <span class="target-label">Adivinhando palavras de:</span>
+                        <span class="target-name">${nomeAlvo}</span>
+                    </div>
+                    <div class="player-words-grid" id="player-${jogador.nome.replace(/\s+/g, '_')}-grid"></div>
+                `;
+                container.appendChild(playerDiv);
+                const grid = document.getElementById(`player-${jogador.nome.replace(/\s+/g, '_')}-grid`);
+                for (let i = 0; i < total; i++) {
+                    const wordDiv = document.createElement('div');
+                    wordDiv.className = 'mini-word-card';
+                    const descoberta = jogador.palavras_descobertas && jogador.palavras_descobertas[i];
+                    const dica = jogador.dicas && jogador.dicas[i] ? jogador.dicas[i] : '?';
+                    wordDiv.classList.add(descoberta ? 'discovered' : 'not-discovered');
+                    wordDiv.innerHTML = `<div class="mini-word-hint">${dica}</div><div class="mini-word-status">${descoberta ? '✓' : ''}</div>`;
+                    grid.appendChild(wordDiv);
+                }
+            });
+        }
+
+        function transferirHost(nomeJogador) {
+            if (!souCriador) return;
+            if (confirm(`Transferir liderança para ${nomeJogador}?`)) {
+                socket.emit('transferir_criador', { sala: codigoSala, para: nomeJogador });
+            }
         }
 
         function gerarInputsPalavras() {

@@ -167,17 +167,23 @@ def limpar_jogadores_desconectados():
                 
                 logger.info(f'Jogador {nome_jogador} removido da sala {codigo} (tempo de reconexão expirou)')
                 
+                # Se criador atual não tem SID válido, promover alguém conectado
+                criador_sid = sala.get('criador')
+                if criador_sid not in sala.get('players', {}) and len(sala.get('players', {})) > 0:
+                    novo_criador_sid, novo_criador_nome = next(iter(sala['players'].items()))
+                    sala['criador'] = novo_criador_sid
+                    emit('novo_criador', { 'nome': novo_criador_nome }, room=codigo)
+                
                 # Reconfigurar alvos se necessário e o jogo já tiver iniciado
                 if len(partida.jogadores) >= 2:
                     try:
                         estado = partida.get_estado_jogo()
                         if estado and 'jogador_da_vez' in estado:
-                            # Jogo está em andamento, reconfigurar alvos
                             partida._configurar_alvos()
-                            # Atualizar estado do jogo para todos
+                            estado = partida.get_estado_jogo()
+                            estado['criador'] = sala.get('criador')
                             emit('estado_atualizado', {'estado': estado}, room=codigo)
                     except Exception:
-                        # Jogo ainda não iniciou, ignorar
                         pass
 
 def limpar_mensagens_antigas():
@@ -229,39 +235,19 @@ def on_disconnect():
             # Remover da lista de players deste SID
             del sala['players'][request.sid]
             
-            # Se for o criador, marcar a sala para remoção futura e notificar os jogadores
+            # Se for o criador, promover automaticamente outro jogador se houver
             if request.sid == sala['criador']:
                 tempo_atual = time.time()
-                # Verificar se a sala foi criada recentemente (menos de 1 minuto)
-                sala_recente = False
-                if 'criada_em' in sala and (tempo_atual - sala['criada_em']) < 60:
-                    # Sala recém-criada - dar mais tempo para o criador reconectar
-                    sala_recente = True
-                    logger.info(f'Sala {codigo} é recente, dando mais tempo para o criador reconectar')
-                    # Tempo de exclusão mais longo para salas recém-criadas
-                    tempo_exclusao = 600  # 10 minutos
+                if len(sala['players']) > 0:
+                    # Promover o primeiro SID disponível
+                    novo_criador_sid, novo_criador_nome = next(iter(sala['players'].items()))
+                    sala['criador'] = novo_criador_sid
+                    emit('novo_criador', { 'nome': novo_criador_nome }, room=codigo)
+                    logger.info(f'Criador desconectou na sala {codigo}. Novo criador: {novo_criador_nome}')
                 else:
-                    # Sala já existe há algum tempo
-                    tempo_exclusao = 300  # 5 minutos
-                
-                # Se não houver outros jogadores conectados, definir timestamp para exclusão mais rápida
-                if len(sala['players']) == 0:
-                    logger.info(f'Criador saiu da sala {codigo} e não há outros jogadores - sala marcada para remoção')
-                    if sala_recente:
-                        # Dar mais tempo para salas recém-criadas
-                        sala['marcada_para_remocao'] = tempo_atual + 120  # 2 minutos
-                    else:
-                        sala['marcada_para_remocao'] = tempo_atual + 60  # 1 minuto
-                else:
-                    # Ainda existem jogadores, a sala permanece por mais tempo
-                    logger.info(f'Criador saiu da sala {codigo} mas ainda há {len(sala["players"])} jogadores conectados')
-                    sala['marcada_para_remocao'] = tempo_atual + tempo_exclusao
-                    
-                    # Notificar os outros jogadores que o criador saiu
-                    emit('aviso', {
-                        'msg': f'O criador da sala ({nome_jogador}) saiu. A sala permanecerá disponível por mais {tempo_exclusao//60} minutos.'
-                    }, room=codigo)
-                    
+                    # Sem jogadores restantes: marcar para remoção rápida
+                    sala['marcada_para_remocao'] = tempo_atual + 60
+                    logger.info(f'Sala {codigo} marcada para remoção (criador saiu e não há mais jogadores)')
                 # Atualizar o último acesso
                 sala['ultimo_acesso'] = tempo_atual
                 continue
@@ -346,9 +332,11 @@ def criar_sala(data):
                 request.sid: nome
             },
             'players_prontos': set(),     # conjunto de jogadores prontos
-            'palavras': {},               # opcional, se usada
+            'palavras': {},               # opcional, se usada (map SID → palavras)
+            'player_ids': {},             # map nome_lower → player_id
             'ultimo_acesso': tempo_atual,  # timestamp para controle de salas inativas
-            'criada_em': tempo_atual      # timestamp de criação da sala
+            'criada_em': tempo_atual,      # timestamp de criação da sala
+            'modo': 'classico'             # modo padrão
         }
 
         logger.info(f'Sala {codigo} salva no dicionário. Total de salas: {len(salas)}')
@@ -366,7 +354,8 @@ def criar_sala(data):
                 'max_jogadores': max_jogadores
             },
             'players': salas[codigo]['players'],
-            'criador': salas[codigo]['criador']
+            'criador': salas[codigo]['criador'],
+            'modo': 'classico'
         }
 
         logger.info(f'Enviando resposta sala_criada: {resposta}')
@@ -393,8 +382,8 @@ def entrar_na_sala(data):
         # Garantir que o código de sala seja sempre normalizado
         codigo_original = data.get('sala', '')
         codigo = codigo_original.strip().upper()
-        
         nome = data.get('nome', '').strip()
+        player_id = data.get('player_id')
         
         logger.info(f'Tentativa de entrar na sala: "{codigo}" por jogador "{nome}" (SID: {request.sid})')
 
@@ -403,88 +392,104 @@ def entrar_na_sala(data):
             logger.warning(f'Tentativa de entrar em sala com código vazio: {request.sid}')
             emit('erro', {'msg': 'Código da sala é obrigatório'})
             return
-            
         if codigo not in salas:
             logger.warning(f'Sala não encontrada: "{codigo}" (original: "{codigo_original}"). Salas disponíveis: {list(salas.keys())}')
             emit('erro', {'msg': 'Sala não encontrada. Verifique o código e tente novamente.'})
             return
-            
         if not nome:
             logger.warning(f'Tentativa de entrar na sala {codigo} sem nome: {request.sid}')
             emit('erro', {'msg': 'Nome é obrigatório'})
             return
 
-        partida = salas[codigo]['partida']
-        
-        # Atualizar timestamp de último acesso
-        salas[codigo]['ultimo_acesso'] = time.time()
+        sala = salas[codigo]
+        partida = sala['partida']
+        sala['ultimo_acesso'] = time.time()
 
-        # Verificar se este é o criador original reconectando
-        criador_sid = salas[codigo].get('criador')
-        eh_criador_original = False
-        
-        # Encontrar nome do criador original
-        nome_criador_original = None
-        if criador_sid:
-            # Buscar nome do criador nos jogadores da partida ou nos players conectados
-            for j in partida.jogadores:
-                # Se há apenas 1 jogador, ele deve ser o criador
-                if len(partida.jogadores) == 1:
-                    nome_criador_original = j.nome
-                    break
-        
+        # Armazenar/validar player_id para o nome
+        sala.setdefault('player_ids', {})
+        nome_key = nome.lower()
+        if player_id:
+            existente_pid = sala['player_ids'].get(nome_key)
+            if existente_pid and existente_pid != player_id:
+                # Nome já usado por outro player_id - rejeitar
+                emit('erro', {'msg': 'Este nome já está em uso na sala. Escolha outro.'})
+                return
+            sala['player_ids'][nome_key] = player_id
+
         # Verifica se o jogador já está na sala (pelo nome)
-        jogador_existente = next((j for j in partida.jogadores if j.nome.lower() == nome.lower()), None)
+        jogador_existente = next((j for j in partida.jogadores if j.nome.lower() == nome_key), None)
+
+        # Verificar criador atual por SID → nome
+        criador_sid_atual = sala.get('criador')
+        nome_criador = None
+        for sid, nome_player in sala.get('players', {}).items():
+            if sid == criador_sid_atual:
+                nome_criador = nome_player
+                break
+
+        eh_criador_desta_conexao = (request.sid == criador_sid_atual)
 
         if not jogador_existente:
-            # É um novo jogador
+            # Novo jogador
             if len(partida.jogadores) >= partida.config.max_jogadores:
                 emit('erro', {'msg': 'A sala está cheia.'})
                 return
-            
-            # Se é o primeiro jogador a entrar numa sala existente, torná-lo criador
             if len(partida.jogadores) == 0:
-                logger.info(f'Primeiro jogador {nome} se tornando criador da sala {codigo}')
-                salas[codigo]['criador'] = request.sid
-                eh_criador_original = True
-            
-            # Adiciona o novo jogador
+                sala['criador'] = request.sid
+                eh_criador_desta_conexao = True
             jogador = Jogador(nome, partida.config.num_palavras)
             partida.adicionar_jogador(jogador)
             logger.info(f'Jogador {nome} ({request.sid}) entrou na sala {codigo}')
         else:
-            # É um jogador reconectando
-            logger.info(f'Jogador {nome} ({request.sid}) (re)conectou-se à sala {codigo}')
-            
-            # Verificar se é o criador original reconectando
-            if nome_criador_original and nome.lower() == nome_criador_original.lower():
-                logger.info(f'Criador original {nome} reconectando à sala {codigo}')
-                salas[codigo]['criador'] = request.sid  # Atualizar SID do criador
-                eh_criador_original = True
+            # Re-conexão: mover mapping de SID antigo para o novo, se existir
+            sids_mesmo_nome = [sid for sid, n in sala['players'].items() if n.lower() == nome_key and sid != request.sid]
+            for old_sid in sids_mesmo_nome:
+                # Migrar palavras do old_sid para o novo SID
+                if 'palavras' in sala and old_sid in sala['palavras']:
+                    sala['palavras'][request.sid] = sala['palavras'].get(old_sid, [])
+                    try:
+                        del sala['palavras'][old_sid]
+                    except KeyError:
+                        pass
+                try:
+                    del sala['players'][old_sid]
+                except KeyError:
+                    pass
+            # Se reconectou e era o criador (por nome), atualizar criador para o novo SID
+            if nome_criador and nome.lower() == nome_criador.lower():
+                sala['criador'] = request.sid
+                eh_criador_desta_conexao = True
+            logger.info(f'Jogador {nome} ({request.sid}) reconectou na sala {codigo}')
 
+        # Entrar na room e registrar este SID → nome
         join_room(codigo)
-        salas[codigo]['players'][request.sid] = nome
+        sala['players'][request.sid] = nome
+
+        # Limpar marca de desconexão se houver
+        if 'desconexoes' in sala and nome in sala['desconexoes']:
+            try:
+                del sala['desconexoes'][nome]
+            except KeyError:
+                pass
+            emit('aviso', {'msg': f'{nome} reconectou.'}, room=codigo)
 
         # Preparar informações dos jogadores com status de pronto
         jogadores_info = []
-        players_prontos = salas[codigo].get('players_prontos', set())
-        criador_sid_atual = salas[codigo].get('criador')
-        
-        # Encontrar nome do criador atual
-        nome_criador = None
-        for sid, nome_player in salas[codigo].get('players', {}).items():
+        players_prontos = sala.get('players_prontos', set())
+        criador_sid_atual = sala.get('criador')
+        nome_criador_atual = None
+        for sid, nome_player in sala.get('players', {}).items():
             if sid == criador_sid_atual:
-                nome_criador = nome_player
+                nome_criador_atual = nome_player
                 break
-        
         for j in partida.jogadores:
             jogadores_info.append({
                 'nome': j.nome,
                 'pronto': j.nome in players_prontos,
-                'criador': j.nome == nome_criador
+                'criador': j.nome == nome_criador_atual
             })
 
-        # Notifica todos na sala sobre o estado atual
+        # Broadcast do estado atual (não incluir sou_criador aqui!)
         emit('jogador_entrou', {
             'jogador': nome,
             'jogadores': [j.nome for j in partida.jogadores],
@@ -492,35 +497,27 @@ def entrar_na_sala(data):
             'max': partida.config.max_jogadores,
             'jogadores_info': jogadores_info,
             'todos_prontos': verificar_todos_prontos(codigo),
-            'sou_criador': eh_criador_original or (request.sid == criador_sid_atual)  # NOVA FLAG
+            'modo': sala.get('modo', 'classico')
         }, room=codigo)
 
-        # Enviar evento específico para o jogador que acabou de entrar
-        # informando se ele é o criador
+        # Enviar evento específico para o jogador que acabou de entrar informando se ele é o criador
         emit('meu_status', {
-            'sou_criador': eh_criador_original or (request.sid == criador_sid_atual),
+            'sou_criador': eh_criador_desta_conexao or (request.sid == sala.get('criador')),
             'nome': nome,
             'sala': codigo
         })
 
-        # Não emitir mais o evento 'pode_comecar' automaticamente
-        # Agora será emitido apenas quando o criador clicar em "Iniciar Partida"
-            
-        # Se o jogador já tinha enviado palavras, enviar estado atual
-        if 'palavras' in salas[codigo]:
+        # Se o jogador já tinha enviado palavras, avisar
+        if 'palavras' in sala:
             palavras_jogador = None
-            # Verificar todas as chaves no mapa de palavras para ver se esse jogador já definiu
-            for sid, player_nome in salas[codigo]['players'].items():
-                if player_nome.lower() == nome.lower() and sid in salas[codigo]['palavras']:
-                    palavras_jogador = salas[codigo]['palavras'][sid]
+            for sid, player_nome in sala['players'].items():
+                if player_nome.lower() == nome.lower() and sid in sala['palavras']:
+                    palavras_jogador = sala['palavras'][sid]
                     break
-                    
             if palavras_jogador:
                 emit('palavras_recebidas', {
                     'msg': 'Suas palavras foram recuperadas! Aguardando os outros jogadores...'
                 })
-                
-                # Verificar novamente se todos definiram palavras e iniciar o jogo se possível
                 verificar_iniciar_jogo(codigo)
 
     except ValueError as e:
@@ -976,6 +973,74 @@ def marcar_pronto(data):
         logger.error(f'Erro ao marcar pronto: {e}', exc_info=True)
         emit('error', {'msg': 'Erro interno do servidor'})
 
+@socketio.on('selecionar_modo')
+def selecionar_modo(data):
+    try:
+        codigo = (data or {}).get('sala', '').strip().upper() or request.args.get('sala') or ''
+        nome = (data or {}).get('nome', '')
+        modo = (data or {}).get('modo', 'classico')
+        if not codigo or codigo not in salas:
+            emit('erro', {'msg': 'Sala não encontrada'})
+            return
+        sala = salas[codigo]
+        # Apenas o criador pode alterar
+        if request.sid != sala.get('criador'):
+            emit('erro', {'msg': 'Apenas o criador pode alterar o modo'})
+            return
+        if modo not in ('classico', 'cooperativo', 'duelo', 'relampago'):
+            emit('erro', {'msg': 'Modo inválido'})
+            return
+        sala['modo'] = modo
+        emit('modo_atualizado', { 'modo': modo }, room=codigo)
+        logger.info(f'Sala {codigo}: modo alterado para {modo} por {nome}')
+    except Exception as e:
+        logger.error(f'Erro ao selecionar modo: {e}', exc_info=True)
+        emit('erro', {'msg': 'Erro interno do servidor'})
+
+@socketio.on('transferir_criador')
+def transferir_criador(data):
+    try:
+        codigo = (data or {}).get('sala', '').strip().upper()
+        nome_destino = (data or {}).get('para', '').strip()
+        if not codigo or codigo not in salas:
+            emit('erro', {'msg': 'Sala não encontrada'})
+            return
+        sala = salas[codigo]
+        if request.sid != sala.get('criador'):
+            emit('erro', {'msg': 'Apenas o criador pode transferir a liderança'})
+            return
+        # Encontrar SID do destino
+        destino_sid = None
+        for sid, n in sala.get('players', {}).items():
+            if n.lower() == nome_destino.lower():
+                destino_sid = sid
+                break
+        if not destino_sid:
+            emit('erro', {'msg': 'Jogador de destino não encontrado ou desconectado'})
+            return
+        sala['criador'] = destino_sid
+        emit('novo_criador', { 'nome': nome_destino }, room=codigo)
+        # Reemitir status de prontos com flag de criador atualizada
+        partida = sala['partida']
+        jogadores_info = []
+        nome_criador_atual = nome_destino
+        for j in partida.jogadores:
+            jogadores_info.append({
+                'nome': j.nome,
+                'pronto': j.nome in sala.get('players_prontos', set()),
+                'criador': j.nome == nome_criador_atual
+            })
+        emit('status_prontos_atualizado', {
+            'jogadores': jogadores_info,
+            'todos_prontos': verificar_todos_prontos(codigo),
+            'total_jogadores': len(partida.jogadores),
+            'jogadores_prontos': len(sala.get('players_prontos', set()))
+        }, room=codigo)
+        logger.info(f'Sala {codigo}: criador transferido para {nome_destino}')
+    except Exception as e:
+        logger.error(f'Erro ao transferir criador: {e}', exc_info=True)
+        emit('erro', {'msg': 'Erro interno do servidor'})
+
 @socketio.on('sair_da_sala')
 def sair_da_sala(data):
     """Permite a um jogador sair explicitamente da sala"""
@@ -1000,13 +1065,14 @@ def sair_da_sala(data):
         # Se o criador saiu, remarcar a sala para remoção ou promover outro
         if request.sid == sala.get('criador'):
             if partida.jogadores:
-                # Promover primeiro jogador restante
+                # Promover primeiro jogador restante (pelo nome)
+                novo_nome = partida.jogadores[0].nome
                 for sid, n in sala.get('players', {}).items():
-                    if n.lower() == partida.jogadores[0].nome.lower():
+                    if n.lower() == novo_nome.lower():
                         sala['criador'] = sid
+                        emit('novo_criador', { 'nome': novo_nome }, room=codigo)
                         break
             else:
-                # Sem jogadores, marcar remoção rápida
                 sala['marcada_para_remocao'] = time.time() + 60
 
         leave_room(codigo)
